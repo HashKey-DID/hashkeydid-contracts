@@ -31,12 +31,12 @@ contract DeedGrain is ERC1155Supply {
         setBaseUri(_uri);
     }
 
-    function mint(address to, uint256 tokenId) public onlyControllers {
+    function mint(address to, uint256 tokenId, bytes memory data) public onlyControllers {
         if (supplies[tokenId] != 0) {
             require(totalSupply(tokenId) + 1 <= supplies[tokenId], "insufficient supply");
         }
         indexMap[tokenId][to] = totalSupply(tokenId) + 1;
-        _mint(to, tokenId, 1, "");
+        _mint(to, tokenId, 1, data);
     }
 
     function burn(address from, uint256 tokenId, uint256 amount) public onlyControllers {
@@ -56,23 +56,8 @@ contract DeedGrain is ERC1155Supply {
         _baseMetadataURI = baseUri;
     }
 
-    function uri(uint256 tokenId) public override view returns(string memory) {
-        if (tokenId == 0) {
-            return "0";
-        }
-        uint256 temp = tokenId;
-        uint256 digits;
-        while (temp != 0) {
-            digits++;
-            temp /= 10;
-        }
-        bytes memory buffer = new bytes(digits);
-        while (tokenId != 0) {
-            digits -= 1;
-            buffer[digits] = bytes1(uint8(48 + uint256(tokenId % 10)));
-            tokenId /= 10;
-        }
-        return string(abi.encodePacked(_baseMetadataURI, string(buffer)));
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        return string(abi.encodePacked(_baseMetadataURI, _uint2str(tokenId)));
     }
 
     function _beforeTokenTransfer(
@@ -86,16 +71,38 @@ contract DeedGrain is ERC1155Supply {
         if (!transferable) {
             require(from == address(0) || to == address(0), "this NFT is not allowed to be transferred");
         }
-        for (uint i = 0; i < ids.length; i++) {
+        for (uint256 i = 0; i < ids.length; i++) {
             if (to != address(0)) {
                 require(balanceOf(to, ids[i]) == 0, "destination already got this DeedGrain");
                 if (indexMap[ids[i]][to] == 0) {
-                    uint index = indexMap[ids[i]][from];
+                    uint256 index = indexMap[ids[i]][from];
                     indexMap[ids[i]][to] = index;
                 }
             }
             delete indexMap[ids[i]][from];
         }
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
+    }
+
+    function _uint2str(uint256 _i) internal pure returns (string memory) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bStr = new bytes(len);
+        uint256 k = len;
+        while (_i != 0) {
+            k = k - 1;
+            uint8 temp = (48 + uint8(_i - (_i / 10) * 10));
+            bytes1 b1 = bytes1(temp);
+            bStr[k] = b1;
+            _i /= 10;
+        }
+        return string(bStr);
     }
 }
