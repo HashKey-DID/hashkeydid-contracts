@@ -18,34 +18,34 @@ describe("DeedGrain", async () => {
   });
 
   it("Should not be able to mint DG", async () => {
-    await expect(deedGrain.connect(accounts[1]).mint(deployer.address, 1)).to.be.revertedWith("");
+    await expect(deedGrain.connect(accounts[1]).mint(deployer.address, 1, "0x")).to.be.revertedWith("");
   });
 
   it("Should be able to mint DG", async () => {
-    await deedGrain.connect(accounts[0]).mint(deployer.address, 1);
+    await deedGrain.connect(accounts[0]).mint(deployer.address, 1, "0x");
     expect(await deedGrain.balanceOf(deployer.address, 1)).to.equal(1);
   });
 
   it("Should not be able to transfer DG", async () => {
-    await deedGrain.mint(deployer.address, 1);
+    await deedGrain.mint(deployer.address, 1, "0x");
     await expect(deedGrain.connect(deployer).safeTransferFrom(deployer.address, accounts[1].address, 1, 1, ethers.utils.randomBytes(0))).to.be.revertedWith("this NFT is not allowed to be transferred");
   });
 
   it("Should be able to transfer DG", async () => {
-    await deedGrain.mint(deployer.address, 1);
+    await deedGrain.mint(deployer.address, 1, "0x");
     await deedGrain.reverseTransferable();
     await deedGrain.connect(deployer).safeTransferFrom(deployer.address, accounts[1].address, 1, 1, ethers.utils.randomBytes(0));
     expect(await deedGrain.balanceOf(accounts[1].address, 1)).to.equal(1);
   });
 
   it("Should be able to burn DG", async () => {
-    await deedGrain.mint(deployer.address, 1);
+    await deedGrain.mint(deployer.address, 1, "0x");
     await deedGrain.connect(deployer).burn(deployer.address, 1, 1);
     expect(await deedGrain.balanceOf(deployer.address, 1)).to.equal(0);
   });
 
   it("Should not be able to burn DG", async () => {
-    await deedGrain.mint(deployer.address, 1);
+    await deedGrain.mint(deployer.address, 1, "0x");
     await expect(deedGrain.connect(accounts[1]).burn(deployer.address, 1, 1)).to.be.revertedWith("");
   });
 });

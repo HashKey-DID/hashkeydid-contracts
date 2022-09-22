@@ -2,16 +2,19 @@
 pragma solidity ^0.8.0;
 pragma experimental ABIEncoderV2;
 
+import "./interfaces/IDeedGrain.sol";
+import "./interfaces/IDeedGrainNFT.sol";
+import "./DidStorage.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
-import "./DeedGrain.sol";
-import "./DidStorage.sol";
 
-abstract contract DGIssuer is DidV1Storage {
-
+abstract contract DGIssuer is DidV2Storage {
     /// @dev Emitted when issue DG successfully
     event IssueDG(address indexed, address);
+
+    /// @dev Emitted when issue NFT successfully
+    event IssueNFT(address indexed, address);
 
     /// @dev Only owner
     modifier onlyOwner() {
@@ -32,33 +35,99 @@ abstract contract DGIssuer is DidV1Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
-        require(_validate(keccak256(abi.encodePacked(msg.sender)), _evidence, signer_), "invalid evidence");
-        DeedGrain DG = new DeedGrain(_name, _symbol, _baseUri, _transferable);
-        deedGrainAddrToIssur[address(DG)] = msg.sender;
-        emit IssueDG(msg.sender, address(DG));
+        require(_validate(keccak256(abi.encodePacked(msg.sender)), _evidence, signer), "invalid evidence");
+        bool success;
+        bytes memory data;
+        (success, data) = dgFactory.delegatecall(
+            abi.encodeWithSignature(
+                "issueDG(string,string,string,bool)",
+                _name,
+                _symbol,
+                _baseUri,
+                _transferable
+            )
+        );
+        require(success, "issueDG failed");
+        address DGAddr = abi.decode(data, (address));
+        deedGrainAddrToIssuer[DGAddr] = msg.sender;
+        emit IssueDG(msg.sender, DGAddr);
+    }
+
+    /// @dev Issue DG NFT
+    /// @param _name ERC721 NFT name
+    /// @param _symbol ERC721 NFT symbol
+    /// @param _baseUri ERC721 NFT baseUri
+    /// @param _evidence Signature by HashKeyDID
+    /// @param _supply DG NFT supply
+    function issueNFT(
+        string memory _name,
+        string memory _symbol,
+        string memory _baseUri,
+        bytes memory _evidence,
+        uint256 _supply
+    ) public {
+        require(
+            _validate(
+                keccak256(abi.encodePacked(msg.sender)),
+                _evidence,
+                signer
+            ),
+            "invalid evidence"
+        );
+        bool success;
+        bytes memory data;
+        (success, data) = dgFactory.delegatecall(
+            abi.encodeWithSignature(
+                "issueNFT(string,string,string,uint256)",
+                _name,
+                _symbol,
+                _baseUri,
+                _supply
+            )
+        );
+        require(success, "issueDGNFT failed");
+        address DGNFTAddr = abi.decode(data, (address));
+        deedGrainAddrToIssuer[DGNFTAddr] = msg.sender;
+        emit IssueNFT(msg.sender, DGNFTAddr);
     }
 
     /// @dev Set didSigner address
-    /// @param signer Did singer address
-    function setSigner(address signer) public onlyOwner {
-        signer_ = signer;
+    /// @param signer_ Did singer address
+    function setSigner(address signer_) public onlyOwner {
+        signer = signer_;
+    }
+
+    /// @dev Set dgFactory address
+    /// @param factory DeedGrainFactory contract address
+    function setDGFactory(address factory) public onlyOwner {
+        dgFactory = factory;
     }
 
     /// @dev Only issuer can set every kind of token's supply
     /// @param DGAddr DG contract address
     /// @param tokenId TokenId
     /// @param supply Token's supply number
-    function setTokenSupply(address DGAddr, uint tokenId, uint supply) public {
-        require(msg.sender == owner || msg.sender == deedGrainAddrToIssur[DGAddr], "caller are not allowed to set supply");
-        DeedGrain DG = DeedGrain(DGAddr);
+    function setTokenSupply(
+        address DGAddr,
+        uint256 tokenId,
+        uint256 supply
+    ) public {
+        require(
+            msg.sender == owner || msg.sender == deedGrainAddrToIssuer[DGAddr],
+            "caller are not allowed to set supply"
+        );
+        IDeedGrain DG = IDeedGrain(DGAddr);
         DG.setSupply(tokenId, supply);
     }
 
     /// @dev Only issuer can set token's baseuri
     /// @param DGAddr DG contract address
     /// @param baseUri All of the token's baseuri
-    function setTokenBaseUri(address DGAddr, string memory baseUri) public onlyOwner {
-        DeedGrain DG = DeedGrain(DGAddr);
+    function setTokenBaseUri(address DGAddr, string memory baseUri)
+        public
+        onlyOwner
+    {
+        IDeedGrain DG = IDeedGrain(DGAddr);
         DG.setBaseUri(baseUri);
     }
 
@@ -66,11 +135,20 @@ abstract contract DGIssuer is DidV1Storage {
     /// @param DGAddr DG contract address
     /// @param tokenId TokenId
     /// @param addrs All the users address to airdrop
-    function mintDG(address DGAddr, uint tokenId, address[] memory addrs) public {
-        require(msg.sender == dgMinter || msg.sender == deedGrainAddrToIssur[DGAddr], "caller are not allowed to mint");
-        DeedGrain DG = DeedGrain(DGAddr);
-        for(uint i=0; i<addrs.length; i++){
-            DG.mint(addrs[i], tokenId);
+    function mintDG(
+        address DGAddr,
+        uint256 tokenId,
+        address[] memory addrs,
+        bytes memory data
+    ) public {
+        require(
+            msg.sender == dgMinter ||
+                msg.sender == deedGrainAddrToIssuer[DGAddr],
+            "caller are not allowed to mint"
+        );
+        IDeedGrain DG = IDeedGrain(DGAddr);
+        for (uint256 i = 0; i < addrs.length; i++) {
+            DG.mint(addrs[i], tokenId, data);
         }
     }
 
@@ -78,16 +156,99 @@ abstract contract DGIssuer is DidV1Storage {
     /// @param DGAddr DG token address
     /// @param tokenId TokenId
     /// @param evidence Signature
-    function claimDG(address DGAddr, uint tokenId, bytes memory evidence) public {
-        require(!_evidenceUsed[keccak256(evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId)), evidence, signer_), "invalid evidence");
+    function claimDG(
+        address DGAddr,
+        uint256 tokenId,
+        bytes memory data,
+        bytes memory evidence
+    ) public {
+        require(
+            !_evidenceUsed[keccak256(evidence)] &&
+                _validate(
+                    keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data)),
+                    evidence,
+                    signer
+                ),
+            "invalid evidence"
+        );
         _evidenceUsed[keccak256(evidence)] = true;
-        DeedGrain DG = DeedGrain(DGAddr);
-        DG.mint(msg.sender, tokenId);
+        IDeedGrain DG = IDeedGrain(DGAddr);
+        DG.mint(msg.sender, tokenId, data);
+    }
+
+    /// @dev Only issuer can set NFT supply
+    /// @param NFTAddr DGNFT contract address
+    /// @param supply NFT supply number
+    function setNFTSupply(address NFTAddr, uint256 supply) public {
+        require(
+            msg.sender == owner || msg.sender == deedGrainAddrToIssuer[NFTAddr],
+            "caller are not allowed to set supply"
+        );
+        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
+        NFT.setSupply(supply);
+    }
+
+    /// @dev Only issuer can set NFT's baseuri
+    /// @param NFTAddr DG NFT contract address
+    /// @param baseUri All of the NFT's baseuri
+    function setNFTBaseUri(address NFTAddr, string memory baseUri)
+        public
+        onlyOwner
+    {
+        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
+        NFT.setBaseUri(baseUri);
+    }
+
+    /// @dev Only issuer can airdrop the nft
+    /// @param NFTAddr DG NFT contract address
+    /// @param sid SeriesId
+    /// @param addrs All the users address to airdrop
+    function mintDGNFT(
+        address NFTAddr,
+        uint256 sid,
+        address[] memory addrs
+    ) public {
+        require(
+            msg.sender == dgMinter ||
+                msg.sender == deedGrainAddrToIssuer[NFTAddr],
+            "caller are not allowed to mint"
+        );
+        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
+        for (uint256 i = 0; i < addrs.length; i++) {
+            NFT.mint(addrs[i], sid);
+        }
+    }
+
+    /// @dev User claim the nft
+    /// @param NFTAddr DG NFT address
+    /// @param sid SeriesId
+    /// @param evidence Signature
+    function claimDGNFT(
+        address NFTAddr,
+        uint256 sid,
+        bytes memory evidence
+    ) public {
+        require(
+            !_evidenceUsed[keccak256(evidence)] &&
+                _validate(
+                    keccak256(abi.encodePacked(msg.sender, NFTAddr, sid)),
+                    evidence,
+                    signer
+                ),
+            "invalid evidence"
+        );
+        _evidenceUsed[keccak256(evidence)] = true;
+        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
+        NFT.mint(msg.sender, sid);
     }
 
     /// @dev validate signature msg
-    function _validate(bytes32 message, bytes memory signature, address signer_) internal pure returns (bool) {
-        require(signer_ != address(0) && signature.length == 65);
+    function _validate(
+        bytes32 message,
+        bytes memory signature,
+        address signer
+    ) internal pure returns (bool) {
+        require(signer != address(0) && signature.length == 65);
 
         bytes32 r;
         bytes32 s;
@@ -96,14 +257,14 @@ abstract contract DGIssuer is DidV1Storage {
             r := mload(add(signature, 0x20))
             s := mload(add(signature, 0x40))
         }
-        return ecrecover(message, v, r, s) == signer_;
+        return ecrecover(message, v, r, s) == signer;
     }
 }
 
-/// @title A simple did contract v1
+/// @title A simple did contract v2
 /// @notice You can use this contract to claim an DID to you
 /// @dev Only contains NFT and id name mapping now
-contract DidV1 is ERC721EnumerableUpgradeable, DGIssuer {
+contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
 
     using CountersUpgradeable for CountersUpgradeable.Counter;
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;

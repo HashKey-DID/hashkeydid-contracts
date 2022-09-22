@@ -4,16 +4,16 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 
-/// @title A storage contract for didv1
+/// @title A storage contract for didv2
 /// @dev include mapping from id to address and address to id
-contract DidV1Storage {
+contract DidV2Storage {
     using CountersUpgradeable for CountersUpgradeable.Counter;
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
 
     address public owner;
 
     string public baseURI_;
-
+    
     mapping(string => bool) public didClaimed;
 
     mapping(address => bool) public addrClaimed;
@@ -22,13 +22,13 @@ contract DidV1Storage {
 
     mapping(string => uint256) public did2TokenId;
 
-    address public signer_;
+    address public signer;
 
     address public dgMinter;
 
     address public didMinter;
 
-    mapping(address => address) public deedGrainAddrToIssur;
+    mapping(address => address) public deedGrainAddrToIssuer;
 
     mapping(bytes32 => bool) _evidenceUsed;
 
@@ -41,4 +41,6 @@ contract DidV1Storage {
     }
 
     mapping(uint256 => mapping(address => mapping(uint256 => KYCInfo))) _KYCMap;
+
+    address public dgFactory;
 }

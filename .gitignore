@@ -12,3 +12,4 @@ cache
 artifacts
 .deps
 .openzeppelin
+package-lock.json
