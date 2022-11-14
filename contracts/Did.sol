@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 pragma solidity ^0.8.0;
-pragma experimental ABIEncoderV2;
 
 import "./interfaces/IDeedGrain.sol";
+import "./interfaces/IDeedGrainV1.sol";
 import "./interfaces/IDeedGrainNFT.sol";
 import "./DidStorage.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
@@ -35,7 +35,8 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
-        require(_validate(keccak256(abi.encodePacked(msg.sender)), _evidence, signer), "invalid evidence");
+        require( !_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri)), _evidence, signer), "invalid evidence");
+        _evidenceUsed[keccak256(_evidence)] = true;
         bool success;
         bytes memory data;
         (success, data) = dgFactory.delegatecall(
@@ -59,21 +60,9 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _baseUri ERC721 NFT baseUri
     /// @param _evidence Signature by HashKeyDID
     /// @param _supply DG NFT supply
-    function issueNFT(
-        string memory _name,
-        string memory _symbol,
-        string memory _baseUri,
-        bytes memory _evidence,
-        uint256 _supply
-    ) public {
-        require(
-            _validate(
-                keccak256(abi.encodePacked(msg.sender)),
-                _evidence,
-                signer
-            ),
-            "invalid evidence"
-        );
+    function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply) public {
+        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri)), _evidence, signer), "invalid evidence");
+        _evidenceUsed[keccak256(_evidence)] = true;
         bool success;
         bytes memory data;
         (success, data) = dgFactory.delegatecall(
@@ -135,7 +124,19 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param DGAddr DG contract address
     /// @param tokenId TokenId
     /// @param addrs All the users address to airdrop
-    function mintDG(
+    function mintDGV1(address DGAddr, uint tokenId, address[] memory addrs) public {
+        require(msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[DGAddr], "caller are not allowed to mint");
+        IDeedGrainV1 DG = IDeedGrainV1(DGAddr);
+        for(uint i=0; i<addrs.length; i++){
+            DG.mint(addrs[i], tokenId);
+        }
+    }
+
+    /// @dev Only issuer can airdrop the nft
+    /// @param DGAddr DG contract address
+    /// @param tokenId TokenId
+    /// @param addrs All the users address to airdrop
+    function mintDGV2(
         address DGAddr,
         uint256 tokenId,
         address[] memory addrs,
