@@ -35,7 +35,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
-        require( !_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri)), _evidence, signer), "invalid evidence");
+        require( !_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
         _evidenceUsed[keccak256(_evidence)] = true;
         bool success;
         bytes memory data;
@@ -61,7 +61,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _supply DG NFT supply
     function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply) public {
-        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri)), _evidence, signer), "invalid evidence");
+        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
         _evidenceUsed[keccak256(_evidence)] = true;
         bool success;
         bytes memory data;
@@ -166,7 +166,7 @@ abstract contract DGIssuer is DidV2Storage {
         require(
             !_evidenceUsed[keccak256(evidence)] &&
                 _validate(
-                    keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data)),
+                    keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data, block.chainid)),
                     evidence,
                     signer
                 ),
@@ -232,7 +232,7 @@ abstract contract DGIssuer is DidV2Storage {
         require(
             !_evidenceUsed[keccak256(evidence)] &&
                 _validate(
-                    keccak256(abi.encodePacked(msg.sender, NFTAddr, sid)),
+                    keccak256(abi.encodePacked(msg.sender, NFTAddr, sid, block.chainid)),
                     evidence,
                     signer
                 ),
@@ -280,7 +280,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     event OwnerChanged(address previousOwner, address newOwner);
     /// @dev Emitted when add KYC successfully 
     event AddKYC(uint256 tokenId, address KYCProvider, uint256 KYCId, bool status, uint256 updateTime, uint256 expireTime, bytes evidence);
-
+    
     /// @dev Initialize only once
     /// @param _name ERC721 NFT name
     /// @param _symbol ERC721 NFT symbol
