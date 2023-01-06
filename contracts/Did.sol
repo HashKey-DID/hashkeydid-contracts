@@ -326,14 +326,6 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         owner = newOwner;
     }
 
-    /// @notice Claim did
-    /// @dev One address can only claim once
-    /// @param did Did
-    function claim(string memory did) public {
-        _mintDid(msg.sender, did);
-        emit Claim(msg.sender, did, totalSupply());
-    }
-
     /// @dev Mint did
     /// @param to Owner of did
     /// @param did Did name 
