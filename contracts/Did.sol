@@ -270,8 +270,6 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     using CountersUpgradeable for CountersUpgradeable.Counter;
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
 
-    /// @dev Emitted when did claimed successfully 
-    event Claim(address indexed addr, string did, uint256 indexed tokenId);
     /// @dev Emitted when did add address authorization
     event AddAuth(string did, address indexed addr, address indexed operator);
     /// @dev Emitted when did cancel address authorization
