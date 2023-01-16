@@ -102,7 +102,7 @@ abstract contract DGIssuer is DidV2Storage {
         uint256 supply
     ) public {
         require(
-            msg.sender == owner || msg.sender == deedGrainAddrToIssuer[DGAddr],
+            msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[DGAddr],
             "caller are not allowed to set supply"
         );
         IDeedGrain DG = IDeedGrain(DGAddr);
@@ -182,7 +182,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param supply NFT supply number
     function setNFTSupply(address NFTAddr, uint256 supply) public {
         require(
-            msg.sender == owner || msg.sender == deedGrainAddrToIssuer[NFTAddr],
+            msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[NFTAddr],
             "caller are not allowed to set supply"
         );
         IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
