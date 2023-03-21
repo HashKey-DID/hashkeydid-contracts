@@ -44,7 +44,8 @@ describe("DidV2", async () => {
         signature = signature.substring(0, signature.length - 2) + "01";
     }
     if (signature.substring(signature.length - 2, signature.length) === "1b") {
-        signature = signature.substring(0, signature.length - 2) + "00";
+        signature = signature.substrin
+        g(0, signature.length - 2) + "00";
     }
 
     //issue deedgrain

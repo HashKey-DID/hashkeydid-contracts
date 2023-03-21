@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import "./interfaces/IDeedGrain.sol";
 import "./interfaces/IDeedGrainV1.sol";
 import "./interfaces/IDeedGrainNFT.sol";
+import "./interfaces/IResolver.sol";
 import "./DidStorage.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
@@ -26,6 +27,18 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param minter DG airdrop address
     function setDGMinterAddr(address minter) public onlyOwner {
         dgMinter = minter;
+    }
+
+    /// @dev Set Resolver address
+    /// @param _resolver Resolver address
+    function setResolverAddr(address _resolver) public onlyOwner {
+        resolver = _resolver;
+    }
+
+    /// @dev Set DID sync address
+    /// @param _didSync DID sync address
+    function setDidSync(address _didSync) public onlyOwner {
+        didSync = _didSync;
     }
 
     /// @dev Issue DG token
@@ -289,10 +302,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         string memory _symbol,
         string memory _baseTokenURI,
         address _owner
-    )
-    public
-    initializer
-    {
+    ) public initializer {
         __ERC721_init(_name, _symbol);
         _setBaseURI(_baseTokenURI);
         owner = _owner;
@@ -324,29 +334,63 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         owner = newOwner;
     }
 
-    /// @dev Mint did
-    /// @param to Owner of did
-    /// @param did Did name 
-    function mint(address to, string memory did) public {
-        require(msg.sender == owner || msg.sender == didMinter, "caller is not allowed to mint did");
-        _mintDid(to, did);
+    /// @dev One address can only claim once
+    function claim(uint256 expiredTimestamp, string memory did, bytes memory evidence, string calldata avatar) public payable {
+        _mintDid(msg.sender, did, expiredTimestamp, evidence, avatar);
     }
 
     /// @dev Mint did
-    /// @param to Owner of did
-    /// @param did Did name
-    function _mintDid(address to, string memory did) internal {
+    function mint(address to, uint256 expiredTimestamp, string memory did, bytes memory evidence, string calldata avatar) public {
+        require(msg.sender == owner || msg.sender == didMinter, "caller is not allowed to mint did");
+        _mintDid(to, did, expiredTimestamp, evidence, avatar);
+    }
+
+    function _mintDid(address to, string memory did, uint256 expiredTimestamp, bytes memory evidence, string calldata avatar) internal {
+        require(expiredTimestamp >= block.timestamp, "evidence expired");
         require(!addrClaimed[to], "addr claimed");
         require(!didClaimed[did], "did used");
         require(verifyDIDFormat(did), "illegal did");
-
+        _validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer);
         addrClaimed[to] = true;
         didClaimed[did] = true;
-        uint256 tokenId = totalSupply()+1;
+        uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
         did2TokenId[did] = tokenId;
         tokenId2Did[tokenId] = did;
 
         _mint(to, tokenId);
+        if (bytes(avatar).length > 0) {
+            IResolver(resolver).setAvatar(tokenId, avatar);
+        }
+    }
+    
+    /// @dev Sync did
+    function mintDidLZ(
+        uint256 tokenId,
+        address user,
+        string memory did, 
+        string memory avatar,
+        address[] memory KYCProviders,
+        uint256[] memory KYCIds,
+        KYCInfo[] memory KYCInfos,
+        bytes[] memory evidences) external {
+        require(msg.sender == didSync || msg.sender == didMinter, "caller is not didSync");
+        require(!addrClaimed[user], "addr claimed");
+        require(!didClaimed[did], "did used");
+        require(verifyDIDFormat(did), "illegal did");
+
+        addrClaimed[user] = true;
+        didClaimed[did] = true;
+        did2TokenId[did] = tokenId;
+        tokenId2Did[tokenId] = did;
+        
+        _mint(user, tokenId);
+
+        
+        addKYCs(tokenId, KYCProviders, KYCIds, KYCInfos, evidences);
+
+        if (bytes(avatar).length > 0) {
+            IResolver(resolver).setAvatar(tokenId, avatar);
+        }
     }
 
     /// @dev Verify did format
@@ -420,24 +464,19 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     }
 
     /// @dev Know Your Customer
-    /// @param tokenId user tokenId
-    /// @param KYCProvider KYC provider address
-    /// @param KYCId KYC level
-    /// @param status bool
-    /// @param updateTime Update time
-    /// @param evidence Signature
-    function addKYC(
+    function addKYCs(
         uint256 tokenId,
-        address KYCProvider,
-        uint256 KYCId,
-        bool status,
-        uint256 updateTime,
-        uint256 expireTime,
-        bytes memory evidence
+        address[] memory KYCProviders,
+        uint256[] memory KYCIds,
+        KYCInfo[] memory KYCInfos,
+        bytes[] memory evidences
     ) public {
-        require(_validate(keccak256(abi.encodePacked(tokenId, KYCProvider, KYCId, status, updateTime, expireTime)), evidence, KYCProvider), "invalid evidence");
-        _KYCMap[tokenId][KYCProvider][KYCId] = KYCInfo({status: status, updateTime: updateTime, expireTime:expireTime});
-        emit AddKYC(tokenId, KYCProvider, KYCId, status, updateTime, expireTime, evidence);
+        for(uint i = 0; i < KYCProviders.length; i++){
+            if(_validate(keccak256(abi.encodePacked(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime)), evidences[i], KYCProviders[i])){
+                _KYCMap[tokenId][KYCProviders[i]][KYCIds[i]] = KYCInfos[i];
+                emit AddKYC(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime,evidences[i]);
+            }
+        }
     }
 
     /// @dev Know your customer status
@@ -461,4 +500,10 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         require(from == address(0), "cannot transfer");
         super._beforeTokenTransfer(from, to, tokenId);
     }
+
+    function withdraw() public onlyOwner {
+        payable(msg.sender).transfer(address(this).balance);
+    }
+
+    receive() external payable {}
 }

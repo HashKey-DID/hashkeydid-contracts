@@ -43,4 +43,8 @@ contract DidV2Storage {
     mapping(uint256 => mapping(address => mapping(uint256 => KYCInfo))) _KYCMap;
 
     address public dgFactory;
+
+    address public resolver;
+
+    address public didSync;
 }

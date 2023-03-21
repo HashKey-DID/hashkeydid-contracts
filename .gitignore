@@ -13,3 +13,11 @@ artifacts
 .deps
 .openzeppelin
 package-lock.json
+script
+task
+hardhat.config.js
+deploy.sh
+deployments
+setAddrs.sh
+upgrade.sh
+remix-compiler.config.js
