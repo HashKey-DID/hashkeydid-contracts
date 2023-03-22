@@ -7,7 +7,10 @@ InsufficientPermission_Err_Message,
 InsufficientPermission_Err_Length,
 
 InvalidEvidence_Err_Message,
-InvalidEvidence_Err_Length
+InvalidEvidence_Err_Length,
+
+DeedGrainIssueFailed_Err_Message,
+DeedGrainIssueFailed_Err_Length
 } from "./lib/ErrorConstants.sol";
 
 import "./DidStorage.sol";
@@ -72,14 +75,14 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
+        bytes32 keccakEvidence;
         assembly{
-            let ptr := mload(0x20)
-            let evidenceLen := mload(_evidence)
-            mstore(ptr, keccak256(_evidence, add(0x20, evidenceLen)))
-            mstore(add(ptr, 0x20), _evidenceUsed.slot)
-            mstore(ptr, sload(keccak256(ptr, 0x40)))
         // require(!_evidenceUsed[keccak256(_evidence)])
-            if eq(sload(keccak256(ptr, 0x40)), 0x01){
+            let ptr := mload(0x40)
+            keccakEvidence := keccak256(add(_evidence, 0x20), mload(_evidence))
+            mstore(ptr, keccakEvidence)
+            mstore(add(ptr, 0x20), _evidenceUsed.slot)
+            if sload(keccak256(ptr, 0x40)){
                 let err := mload(0x20)
                 mstore(err, Error_Selector)
                 mstore(add(err, 0x20), 0x20)  // string offset
@@ -87,56 +90,90 @@ abstract contract DGIssuer is DidV2Storage {
                 mstore(add(err, 0x60), InsufficientPermission_Err_Message)
                 revert(add(err, 0x1c), sub(0x80, 0x1c))
             }
-        // TODO
-        // abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)
-            let hash := mload(0x20)
-            mstore(hash, caller())
-
-            let nameLength := mload(_name)
-            if gt(nameLength, 0x1f) {// greater than 31 bytes
-                mstore(add(hash, 0x20), add(mul(nameLength, 2), 1))  // 2*length+1 is stored in string slot
-            // mstore(fmp, _name.slot)
-                let nameStart := keccak256(add(hash, 0x20), 0x20)
-                for
-                {let i := 0}
-                lt(i, add(div(nameLength, 0x20), 1))
-                {i := add(i, 1)}
-                {
-                    mstore(
-                    add(nameStart, i),
-                    mload(add(_name, mul(0x20, add(i, 1))))
-                    )
-                }
-            }
-
-
-        //            let validate := add(ptr, 0x20)
-        //            mstore(validate, 0x6d050b00) // Keccak256("_validate(bytes32,bytes,address)")
-        //            mstore(add(validate, 0x20), addr)
-        //            mstore(add(validate, 0x40), tokenId)
-        //            mstore(add(validate, 0x60), data) //TODO bytes offset
-        //            calld := add(validate, 0x1c)
-        //            pop(staticcall(gas(), address(), 0, validate, add(0x80, dataLen), 0, 0x20))
-
         }
 
-        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
-        _evidenceUsed[keccak256(_evidence)] = true;
-        bool success;
-        bytes memory data;
-        (success, data) = dgFactory.delegatecall(
-            abi.encodeWithSignature(
-                "issueDG(string,string,string,bool)",
-                _name,
-                _symbol,
-                _baseUri,
-                _transferable
+        bytes32 hash = keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid));
+
+        assembly {
+        // _validate(hash, _evidence, signer)
+            let validate := mload(0x40)
+            mstore(validate, 0x6d050b00) // Keccak256("_validate(bytes32,bytes,address)")
+            mstore(add(validate, 0x20), hash)
+            mstore(add(validate, 0x40), 0x60)
+            mstore(add(validate, 0x60), sload(signer.slot))
+            mstore(add(validate, 0x80), mload(_evidence))
+            mstore(add(validate, 0xa0), mload(add(_evidence, 0x20)))
+            mstore(add(validate, 0xc0), mload(add(_evidence, 0x40)))
+            mstore(add(validate, 0xe0), mload(add(_evidence, 0x60)))
+            let calld := add(validate, 0x1c)
+            pop(staticcall(gas(), address(), calld, 0x100, 0x20, 0x20))
+            if iszero(mload(0x20)) {
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
+                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
+        }
+
+        assembly{
+        // _evidenceUsed[keccak256(_evidence)] = true;
+            let ptr := mload(0x40)
+            mstore(ptr, keccakEvidence)
+            mstore(add(ptr, 0x20), _evidenceUsed.slot)
+            let evidenceUsed := keccak256(ptr, 0x40)
+            sstore(evidenceUsed, 0x01)
+        }
+
+        bytes memory params = abi.encode(_name, _symbol, _baseUri, _transferable);
+        assembly{
+            let issueDGFc := mload(0x40)
+            mstore(issueDGFc, 0xc875020a) // Keccak256("issueDG(string,string,string,bool)")
+            for {let i := 0} lt(i, add(div(mload(params), 0x20), 1)){i := add(i, 1)}{
+                mstore(add(issueDGFc, mul(0x20, add(i, 1))), mload(add(params, mul(0x20, add(i, 1)))))
+            }
+            let res := call(gas(), sload(dgFactory.slot), 0, issueDGFc, add(0x20, mload(params)), 0x20, 0x20)
+            if iszero(res){
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), DeedGrainIssueFailed_Err_Length)
+                mstore(add(err, 0x60), DeedGrainIssueFailed_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
+
+        // deedGrainAddrToIssuer[DGAddr] = msg.sender;
+            let addr := mload(0x20)
+            mstore(add(addr, 0x20), deedGrainAddrToIssuer.slot)
+            sstore(keccak256(addr, 0x40), caller())
+
+        //emit IssueDG(msg.sender, DGAddr);
+            log2(
+            addr, // data
+            0x20,
+            0xc05872623594b1c2574e0531d0cc06b56ceb48baddce03b13163aa822ddfd52c, // event topic0
+            // hash string is keccak256("IssueDG(address,address)")
+            caller() // topic1
             )
-        );
-        require(success, "issueDG failed");
-        address DGAddr = abi.decode(data, (address));
-        deedGrainAddrToIssuer[DGAddr] = msg.sender;
-        emit IssueDG(msg.sender, DGAddr);
+        }
+        //        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
+        //        _evidenceUsed[keccak256(_evidence)] = true;
+        //        bool success;
+        //        bytes memory data;
+        //        (success, data) = dgFactory.delegatecall(
+        //            abi.encodeWithSignature(
+        //                "issueDG(string,string,string,bool)",
+        //                _name,
+        //                _symbol,
+        //                _baseUri,
+        //                _transferable
+        //            )
+        //        );
+        //        require(success, "issueDG failed");
+        //        address DGAddr = abi.decode(data, (address));
+        //        deedGrainAddrToIssuer[DGAddr] = msg.sender;
+        //        emit IssueDG(msg.sender, DGAddr);
     }
 
     /// @dev Issue DG NFT
@@ -146,23 +183,106 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _supply DG NFT supply
     function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply) public {
-        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
-        _evidenceUsed[keccak256(_evidence)] = true;
-        bool success;
-        bytes memory data;
-        (success, data) = dgFactory.delegatecall(
-            abi.encodeWithSignature(
-                "issueNFT(string,string,string,uint256)",
-                _name,
-                _symbol,
-                _baseUri,
-                _supply
+        bytes32 keccakEvidence;
+        assembly{
+        // require(!_evidenceUsed[keccak256(_evidence)])
+            let ptr := mload(0x40)
+            keccakEvidence := keccak256(add(_evidence, 0x20), mload(_evidence))
+            mstore(ptr, keccakEvidence)
+            mstore(add(ptr, 0x20), _evidenceUsed.slot)
+            if sload(keccak256(ptr, 0x40)){
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
+                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
+        }
+
+        bytes32 hash = keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid));
+
+        assembly {
+        // _validate(hash, _evidence, signer)
+            let validate := mload(0x40)
+            mstore(validate, 0x6d050b00) // Keccak256("_validate(bytes32,bytes,address)")
+            mstore(add(validate, 0x20), hash)
+            mstore(add(validate, 0x40), 0x60)
+            mstore(add(validate, 0x60), sload(signer.slot))
+            mstore(add(validate, 0x80), mload(_evidence))
+            mstore(add(validate, 0xa0), mload(add(_evidence, 0x20)))
+            mstore(add(validate, 0xc0), mload(add(_evidence, 0x40)))
+            mstore(add(validate, 0xe0), mload(add(_evidence, 0x60)))
+            let calld := add(validate, 0x1c)
+            pop(staticcall(gas(), address(), calld, 0x100, 0x20, 0x20))
+            if iszero(mload(0x20)) {
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
+                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
+        }
+
+        assembly{
+        // _evidenceUsed[keccak256(_evidence)] = true;
+            let ptr := mload(0x40)
+            mstore(ptr, keccakEvidence)
+            mstore(add(ptr, 0x20), _evidenceUsed.slot)
+            let evidenceUsed := keccak256(ptr, 0x40)
+            sstore(evidenceUsed, 0x01)
+        }
+
+        bytes memory params = abi.encode(_name, _symbol, _baseUri, _supply);
+        assembly{
+            let issueDGFc := mload(0x40)
+            mstore(issueDGFc, 0xed254cfc) // Keccak256("issueNFT(string,string,string,uint256)")
+            for {let i := 0} lt(i, add(div(mload(params), 0x20), 1)){i := add(i, 1)}{
+                mstore(add(issueDGFc, mul(0x20, add(i, 1))), mload(add(params, mul(0x20, add(i, 1)))))
+            }
+            let res := call(gas(), sload(dgFactory.slot), 0, issueDGFc, add(0x20, mload(params)), 0x20, 0x20)
+            if iszero(res){
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), DeedGrainIssueFailed_Err_Length)
+                mstore(add(err, 0x60), DeedGrainIssueFailed_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
+
+        // deedGrainAddrToIssuer[DGAddr] = msg.sender;
+            let addr := mload(0x20)
+            mstore(add(addr, 0x20), deedGrainAddrToIssuer.slot)
+            sstore(keccak256(addr, 0x40), caller())
+
+        //emit IssueNFT(msg.sender, DGNFTAddr);
+            log2(
+            addr, // data
+            0x20,
+            0xf9d4b55952c081f85101e9a2f8c6d5843afd8c96692b343ae78aa9f653090c39, // event topic0
+            // hash string is keccak256("IssueNFT(address,address)")
+            caller() // topic1
             )
-        );
-        require(success, "issueDGNFT failed");
-        address DGNFTAddr = abi.decode(data, (address));
-        deedGrainAddrToIssuer[DGNFTAddr] = msg.sender;
-        emit IssueNFT(msg.sender, DGNFTAddr);
+        }
+
+        //        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
+        //        _evidenceUsed[keccak256(_evidence)] = true;
+        //        bool success;
+        //        bytes memory data;
+        //        (success, data) = dgFactory.delegatecall(
+        //            abi.encodeWithSignature(
+        //                "issueNFT(string,string,string,uint256)",
+        //                _name,
+        //                _symbol,
+        //                _baseUri,
+        //                _supply
+        //            )
+        //        );
+        //        require(success, "issueDGNFT failed");
+        //        address DGNFTAddr = abi.decode(data, (address));
+        //        deedGrainAddrToIssuer[DGNFTAddr] = msg.sender;
+        //        emit IssueNFT(msg.sender, DGNFTAddr);
     }
 
     /// @dev Set didSigner address
@@ -229,7 +349,7 @@ abstract contract DGIssuer is DidV2Storage {
             mstore(calld, 0xa0bcfc7f) // Keccak256("setBaseUri(string)")
             mstore(add(calld, 0x20), baseUri)
             calld := add(calld, 0x1c)
-            pop(call(gas(), DGAddr, 0, calld, 0x20, 0, 0x20))
+            pop(call(gas(), DGAddr, 0, calld, 0x40, 0, 0x20))
         }
     }
 
@@ -306,9 +426,10 @@ abstract contract DGIssuer is DidV2Storage {
                     mstore(calld, 0x94d008ef) // Keccak256("mint(address,uint256,bytes)")
                     mstore(add(calld, 0x20), addr)
                     mstore(add(calld, 0x40), tokenId)
-                    mstore(add(calld, 0x60), data) //TODO bytes offset
+                    mstore(add(calld, 0x60), dataLen) // data bytes offset
+                    mstore(add(calld, 0x80), data)
                     calld := add(calld, 0x1c)
-                    pop(call(gas(), DGAddr, 0, calld, add(0x80, dataLen), 0, 0x20))
+                    pop(call(gas(), DGAddr, 0, calld, 0xa0, 0, 0x20))
                 }
             }
         }
@@ -369,10 +490,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @dev Only issuer can set NFT's baseuri
     /// @param NFTAddr DG NFT contract address
     /// @param baseUri All of the NFT's baseuri
-    function setNFTBaseUri(address NFTAddr, string memory baseUri)
-    public
-    onlyOwner
-    {
+    function setNFTBaseUri(address NFTAddr, string memory baseUri) public onlyOwner {
         assembly{
         // IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
         // NFT.setBaseUri(baseUri);
