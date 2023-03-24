@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import "./DeedGrain.sol";
+import {DeedGrain} from "./DeedGrain.sol";
 import "./DeedGrainNFT.sol";
 
 contract DeedGrainFactory {
@@ -10,17 +10,17 @@ contract DeedGrainFactory {
         string memory _symbol,
         string memory _baseUri,
         bool _transferable
-    ) public returns (address) {
-        // DeedGrain DG = new DeedGrain(_name, _symbol, _baseUri, _transferable);
-        // return address(DG);
+    ) public returns (address deploymentAddress) {
+        //         DeedGrain DG = new DeedGrain(_name, _symbol, _baseUri, _transferable);
+        //         return address(DG);
         bytes memory bytecode = abi.encodePacked(
             type(DeedGrain).creationCode,
             abi.encode(_name, _symbol, _baseUri, _transferable)
         );
         assembly{
-            mstore(0x40, create(0, add(bytecode, 0x20), mload(bytecode)))
-            return (0x40, 0x20)
+            deploymentAddress := create(0, add(0x20, bytecode), mload(bytecode))
         }
+        require(deploymentAddress != address(0));
     }
 
     function issueNFT(
@@ -28,7 +28,7 @@ contract DeedGrainFactory {
         string memory _symbol,
         string memory _baseUri,
         uint256 _supply
-    ) public returns (address) {
+    ) public returns (address deploymentAddress) {
         // DeedGrainNFT NFT = new DeedGrainNFT(_name, _symbol, _baseUri, _supply);
         // return address(NFT);
         bytes memory bytecode = abi.encodePacked(
@@ -36,8 +36,8 @@ contract DeedGrainFactory {
             abi.encode(_name, _symbol, _baseUri, _supply)
         );
         assembly{
-            mstore(0x40, create(0, add(bytecode, 0x20), mload(bytecode)))
-            return (0x40, 0x20)
+            deploymentAddress := create(0, add(0x20, bytecode), mload(bytecode))
         }
+        require(deploymentAddress != address(0));
     }
 }
