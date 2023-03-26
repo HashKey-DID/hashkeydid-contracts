@@ -62,10 +62,11 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
+        bytes32 kevidence = keccak256(_evidence);
         assembly{
         // require(!_evidenceUsed[keccak256(_evidence)])
             let ptr := mload(0x40)
-            mstore(ptr, keccak256(add(_evidence, 0x20), mload(_evidence)))
+            mstore(ptr, kevidence)
             mstore(add(ptr, 0x20), _evidenceUsed.slot)
             if sload(keccak256(ptr, 0x40)){
                 let err := mload(0x20)
@@ -106,7 +107,7 @@ abstract contract DGIssuer is DidV2Storage {
         assembly{
         // _evidenceUsed[keccak256(_evidence)] = true;
             let ptr := mload(0x40)
-            mstore(ptr, keccak256(add(_evidence, 0x20), mload(_evidence)))
+            mstore(ptr, kevidence)
             mstore(add(ptr, 0x20), _evidenceUsed.slot)
             let evidenceUsed := keccak256(ptr, 0x40)
             sstore(evidenceUsed, 0x01)
@@ -285,8 +286,10 @@ abstract contract DGIssuer is DidV2Storage {
             mstore(calld, 0xfc784d49) // Keccak256("setSupply(uint256,uint256)")
             mstore(add(calld, 0x20), tokenId)
             mstore(add(calld, 0x40), supply)
-            calld := add(calld, 0x1c)
-            pop(call(gas(), DGAddr, 0, calld, 0x60, 0, 0x20))
+            let res := call(gas(), DGAddr, 0, add(calld, 0x1c), sub(0x60, 0x1c), 0, 0)
+            if iszero(res){
+                revert(0, 0)
+            }
         }
     }
 
@@ -296,12 +299,20 @@ abstract contract DGIssuer is DidV2Storage {
     function setTokenBaseUri(address DGAddr, string memory baseUri) public onlyOwner {
         // IDeedGrain DG = IDeedGrain(DGAddr);
         // DG.setBaseUri(baseUri);
+        bytes memory params = abi.encode(baseUri);
         assembly{
-            let calld := mload(0x20)
-            mstore(calld, 0xa0bcfc7f) // Keccak256("setBaseUri(string)")
-            mstore(add(calld, 0x20), baseUri)
-            calld := add(calld, 0x1c)
-            pop(call(gas(), DGAddr, 0, calld, 0x40, 0, 0x20))
+            let ptr := mload(0x20)
+            mstore(ptr, 0xa0bcfc7f) // Keccak256("setBaseUri(string)")
+            let paramLen := mload(params)
+            for {let i := 0} lt(i, div(paramLen, 0x20)) {} {
+                i := add(i, 1)
+                let r := mul(0x20, i)
+                mstore(add(ptr, r), mload(add(params, r)))
+            }
+            let res := call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+            if iszero(res){
+                revert(0, 0)
+            }
         }
     }
 
@@ -335,8 +346,10 @@ abstract contract DGIssuer is DidV2Storage {
                     mstore(calld, 0x40c10f19) // Keccak256("mint(address,uint256)")
                     mstore(add(calld, 0x20), addr)
                     mstore(add(calld, 0x40), tokenId)
-                    calld := add(calld, 0x1c)
-                    pop(call(gas(), DGAddr, 0, calld, 0x60, 0, 0x20))
+                    let res := call(gas(), DGAddr, 0, add(calld, 0x1c), sub(0x60, 0x1c), 0, 0)
+                    if iszero(res){
+                        revert(0, 0)
+                    }
                 }
             }
         }
@@ -380,7 +393,10 @@ abstract contract DGIssuer is DidV2Storage {
                 for {let i := 0} lt(i, add(div(paramLen, 0x20), 1)) {i := add(i, 1)} {
                     mstore(add(ptr, mul(0x20, add(i, 1))), mload(add(params, mul(0x20, add(i, 1)))))
                 }
-                pop(call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0x20))
+                let res := call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+                if iszero(res){
+                    revert(0, 0)
+                }
             }
         }
     }
@@ -397,14 +413,13 @@ abstract contract DGIssuer is DidV2Storage {
         bytes memory data,
         bytes memory evidence
     ) public {
-        bytes32 keccakEvidence;
+        bytes32 kevidence = keccak256(evidence);
         assembly{
-        // require(!_evidenceUsed[keccak256(_evidence)])
+        // require(!_evidenceUsed[keccak256(evidence)])
             let ptr := mload(0x40)
-            keccakEvidence := keccak256(add(evidence, 0x20), mload(evidence))
-            mstore(ptr, keccakEvidence)
+            mstore(ptr, keccak256(add(evidence, 0x20), mload(evidence)))
             mstore(add(ptr, 0x20), _evidenceUsed.slot)
-            if sload(keccak256(ptr, 0x40)){
+            if sload(keccak256(ptr, 0x40)) {
                 let err := mload(0x20)
                 mstore(err, Error_Selector)
                 mstore(add(err, 0x20), 0x20)  // string offset
@@ -419,7 +434,6 @@ abstract contract DGIssuer is DidV2Storage {
             evidence,
             signer
         );
-
         assembly {
         // _validate(hash, _evidence, signer)
             let ptr := mload(0x40)
@@ -441,9 +455,9 @@ abstract contract DGIssuer is DidV2Storage {
         }
 
         assembly{
-        // _evidenceUsed[keccak256(_evidence)] = true;
+        // _evidenceUsed[keccak256(evidence)] = true;
             let ptr := mload(0x40)
-            mstore(ptr, keccakEvidence)
+            mstore(ptr, kevidence)
             mstore(add(ptr, 0x20), _evidenceUsed.slot)
             let evidenceUsed := keccak256(ptr, 0x40)
             sstore(evidenceUsed, 0x01)
@@ -456,12 +470,15 @@ abstract contract DGIssuer is DidV2Storage {
             let ptr := mload(0x40)
             mstore(ptr, 0x94d008ef) // Keccak256("mint(address,uint256,bytes)")
             let paramLen := mload(params)
-            for {let i := 0} lt(i, add(div(paramLen, 0x20), 1)) {} {
+            for {let i := 0} lt(i, div(paramLen, 0x20)) {} {
                 i := add(i, 1)
                 let r := mul(0x20, i)
                 mstore(add(ptr, r), mload(add(params, r)))
             }
-            pop(call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0x20))
+            let res := call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+            if iszero(res){
+                revert(0, 0)
+            }
         }
     }
 
@@ -488,8 +505,10 @@ abstract contract DGIssuer is DidV2Storage {
             let calld := add(ptr, 0x40)
             mstore(calld, 0x3b4c4b25) // Keccak256("setSupply(uint256)")
             mstore(add(calld, 0x20), supply)
-            calld := add(calld, 0x1c)
-            pop(call(gas(), NFTAddr, 0, calld, 0x40, 0, 0x20))
+            let res := call(gas(), NFTAddr, 0, add(calld, 0x1c), sub(0x40, 0x1c), 0, 0)
+            if iszero(res){
+                revert(0, 0)
+            }
         }
     }
 
@@ -497,14 +516,23 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param NFTAddr DG NFT contract address
     /// @param baseUri All of the NFT's baseuri
     function setNFTBaseUri(address NFTAddr, string memory baseUri) public onlyOwner {
+        bytes memory params = abi.encode(baseUri);
         assembly{
         // IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
         // NFT.setBaseUri(baseUri);
-            let calld := mload(0x20)
-            mstore(calld, 0xa0bcfc7f) // Keccak256("setBaseUri(string)")
-            mstore(add(calld, 0x20), baseUri)
-            calld := add(calld, 0x1c)
-            pop(call(gas(), NFTAddr, 0, calld, 0x40, 0, 0x20))
+            let ptr := mload(0x20)
+            mstore(ptr, 0xa0bcfc7f) // Keccak256("setBaseUri(string)")
+
+            let paramLen := mload(params)
+            for {let i := 0} lt(i, div(paramLen, 0x20)) {} {
+                i := add(i, 1)
+                let r := mul(0x20, i)
+                mstore(add(ptr, r), mload(add(params, r)))
+            }
+            let res := call(gas(), NFTAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+            if iszero(res){
+                revert(0, 0)
+            }
         }
     }
 
@@ -543,7 +571,10 @@ abstract contract DGIssuer is DidV2Storage {
                 mstore(calld, 0x40c10f19) // Keccak256("mint(address,uint256)")
                 mstore(add(calld, 0x20), addr)
                 mstore(add(calld, 0x40), sid)
-                pop(call(gas(), NFTAddr, 0, add(calld, 0x1c), 0x40, 0, 0x20))
+                let res := call(gas(), NFTAddr, 0, add(calld, 0x1c), sub(0x60, 0x1c), 0, 0)
+                if iszero(res){
+                    revert(0, 0)
+                }
             }
         }
     }
@@ -616,8 +647,10 @@ abstract contract DGIssuer is DidV2Storage {
             mstore(calld, 0x40c10f19) // Keccak256("mint(address,uint256)")
             mstore(add(calld, 0x20), caller())
             mstore(add(calld, 0x40), sid)
-            calld := add(calld, 0x1c)
-            pop(call(gas(), NFTAddr, 0, calld, 0x40, 0, 0x20))
+            let res := call(gas(), NFTAddr, 0, add(calld, 0x1c), sub(0x60, 0x1c), 0, 0)
+            if iszero(res){
+                revert(0, 0)
+            }
         }
     }
 
