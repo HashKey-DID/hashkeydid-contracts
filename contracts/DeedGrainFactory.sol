@@ -11,8 +11,8 @@ contract DeedGrainFactory {
         string memory _baseUri,
         bool _transferable
     ) public returns (address deploymentAddress) {
-        //         DeedGrain DG = new DeedGrain(_name, _symbol, _baseUri, _transferable);
-        //         return address(DG);
+        // DeedGrain DG = new DeedGrain(_name, _symbol, _baseUri, _transferable);
+        // return address(DG);
         bytes memory bytecode = abi.encodePacked(
             type(DeedGrain).creationCode,
             abi.encode(_name, _symbol, _baseUri, _transferable)
