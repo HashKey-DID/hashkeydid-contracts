@@ -654,7 +654,7 @@ abstract contract DGIssuer is DidV2Storage {
         bytes32 message,
         bytes memory signature,
         address signer
-    ) public view returns (bool) {
+    ) internal view returns (bool) {
         assembly {
         // require(signer != address(0) && signature.length == 65);
             if or(eq(signer, 0x0), iszero(eq(mload(signature), 65))){
