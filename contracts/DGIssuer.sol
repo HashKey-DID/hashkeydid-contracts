@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import "./lib/ErrorConstants.sol";
 import "./DidStorage.sol";
-import "./interfaces/IDeedGrain.sol";
 
 abstract contract DGIssuer is DidV2Storage {
     /// @dev Emitted when issue DG successfully

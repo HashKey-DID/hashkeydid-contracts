@@ -61,7 +61,7 @@ import "./ErrorConstants.sol";
 /**
  * @dev Revert with an error when input a zero address which is not invalid.
  */
-    function _revertInsufficientPermission() pure {
+    function _revertZeroAddress() pure {
         assembly {
             mstore(0, Error_Selector)
             mstore(0x20, 0x20)
@@ -74,7 +74,7 @@ import "./ErrorConstants.sol";
 /**
  * @dev Revert with an error when DID name is illegal.
  */
-    function _revertInsufficientPermission() pure {
+    function _revertIllegalDIDName() pure {
         assembly {
             mstore(0, Error_Selector)
             mstore(0x20, 0x20)
@@ -87,7 +87,7 @@ import "./ErrorConstants.sol";
 /**
  * @dev Revert with an error when DID name is already registered by others.
  */
-    function _revertInsufficientPermission() pure {
+    function _revertRegisteredDIDName() pure {
         assembly {
             mstore(0, Error_Selector)
             mstore(0x20, 0x20)
@@ -100,7 +100,7 @@ import "./ErrorConstants.sol";
 /**
  * @dev Revert with an error when the caller has been registered.
  */
-    function _revertInsufficientPermission() pure {
+    function _revertRegisteredAddress() pure {
         assembly {
             mstore(0, Error_Selector)
             mstore(0x20, 0x20)
@@ -113,7 +113,7 @@ import "./ErrorConstants.sol";
 /**
  * @dev Revert with an error when user try to transfer DID.
  */
-    function _revertInsufficientPermission() pure {
+    function _revertNontransferableDID() pure {
         assembly {
             mstore(0, Error_Selector)
             mstore(0x20, 0x20)
