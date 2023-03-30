@@ -82,7 +82,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         require(!addrClaimed[to], "addr claimed");
         require(!didClaimed[did], "did used");
         require(verifyDIDFormat(did), "illegal did");
-        _validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer);
+        require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer));
         addrClaimed[to] = true;
         didClaimed[did] = true;
         uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));

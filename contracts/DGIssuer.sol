@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 import "./lib/ErrorConstants.sol";
-
 import "./DidStorage.sol";
+import "./interfaces/IDeedGrain.sol";
 
 abstract contract DGIssuer is DidV2Storage {
     /// @dev Emitted when issue DG successfully
@@ -62,11 +62,12 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
-        bytes32 kevidence = keccak256(_evidence);
+        require(_validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "InsufficientPermission1");
+
         assembly{
         // require(!_evidenceUsed[keccak256(_evidence)])
             let ptr := mload(0x40)
-            mstore(ptr, kevidence)
+            mstore(ptr, keccak256(add(_evidence, 0x20), mload(_evidence)))
             mstore(add(ptr, 0x20), _evidenceUsed.slot)
             if sload(keccak256(ptr, 0x40)){
                 let err := mload(0x20)
@@ -76,55 +77,19 @@ abstract contract DGIssuer is DidV2Storage {
                 mstore(add(err, 0x60), InsufficientPermission_Err_Message)
                 revert(add(err, 0x1c), sub(0x80, 0x1c))
             }
+
+        // _evidenceUsed[keccak256(_evidence)] = true;
+            sstore(keccak256(ptr, 0x40), 0x01)
         }
 
-        // _validate(hash, _evidence, signer)
-        bytes memory vparams = abi.encode(
-            keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)),
-            _evidence,
-            signer
+        bytes memory params = abi.encodeWithSignature(
+            "issueDG(string,string,string,bool)",
+            _name, _symbol, _baseUri, _transferable
         );
 
-        assembly {
-            let ptr := mload(0x40)
-            mstore(ptr, 0x6d050b00) // Keccak256("_validate(bytes32,bytes,address)")
-            for {let i := 0} lt(i, div(mload(vparams), 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(vparams, r)))
-            }
-            pop(staticcall(gas(), address(), add(ptr, 0x1c), add(mload(vparams), 0x04), 0x20, 0x20))
-            if iszero(mload(0x20)) {
-                let err := mload(0x20)
-                mstore(err, Error_Selector)
-                mstore(add(err, 0x20), 0x20)  // string offset
-                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
-                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
-                revert(add(err, 0x1c), sub(0x80, 0x1c))
-            }
-        }
-
         assembly{
-        // _evidenceUsed[keccak256(_evidence)] = true;
-            let ptr := mload(0x40)
-            mstore(ptr, kevidence)
-            mstore(add(ptr, 0x20), _evidenceUsed.slot)
-            let evidenceUsed := keccak256(ptr, 0x40)
-            sstore(evidenceUsed, 0x01)
-        }
-
-        bytes memory params = abi.encode(_name, _symbol, _baseUri, _transferable);
-        assembly{
-            let ptr := mload(0x60)
-            mstore(ptr, 0xc875020a) // Keccak256("issueDG(string,string,string,bool)")
-            for {let i := 0} lt(i, div(mload(params), 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(params, r)))
-            }
-
             let fmp := mload(0x20)
-            if iszero(delegatecall(gas(), sload(dgFactory.slot), add(ptr, 0x1c), add(mload(params), 0x04), fmp, 0x20)){
+            if iszero(delegatecall(gas(), sload(dgFactory.slot), add(params, 0x20), mload(params), fmp, 0x20)){
                 let err := mload(0x20)
                 mstore(err, Error_Selector)
                 mstore(add(err, 0x20), 0x20)  // string offset
@@ -152,12 +117,12 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _supply DG NFT supply
     function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply) public {
-        bytes32 keccakEvidence;
+        require(_validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "InsufficientPermission");
+
         assembly{
         // require(!_evidenceUsed[keccak256(_evidence)])
             let ptr := mload(0x40)
-            keccakEvidence := keccak256(add(_evidence, 0x20), mload(_evidence))
-            mstore(ptr, keccakEvidence)
+            mstore(ptr, keccak256(add(_evidence, 0x20), mload(_evidence)))
             mstore(add(ptr, 0x20), _evidenceUsed.slot)
             if sload(keccak256(ptr, 0x40)){
                 let err := mload(0x20)
@@ -167,56 +132,17 @@ abstract contract DGIssuer is DidV2Storage {
                 mstore(add(err, 0x60), InsufficientPermission_Err_Message)
                 revert(add(err, 0x1c), sub(0x80, 0x1c))
             }
-        }
-
-        bytes memory vparams = abi.encode(
-            keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)),
-            _evidence,
-            signer
-        );
-
-        assembly {
-        // _validate(hash, _evidence, signer)
-            let ptr := mload(0x40)
-            mstore(ptr, 0x6d050b00) // Keccak256("_validate(bytes32,bytes,address)")
-            for {let i := 0} lt(i, div(mload(vparams), 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(vparams, r)))
-            }
-            mstore(0x20, 0x00)
-            pop(staticcall(gas(), address(), add(ptr, 0x1c), add(mload(vparams), 0x04), 0x20, 0x20))
-            if iszero(mload(0x20)) {
-                let err := mload(0x20)
-                mstore(err, Error_Selector)
-                mstore(add(err, 0x20), 0x20)  // string offset
-                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
-                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
-                revert(add(err, 0x1c), sub(0x80, 0x1c))
-            }
-        }
-
-        assembly{
         // _evidenceUsed[keccak256(_evidence)] = true;
-            let ptr := mload(0x40)
-            mstore(ptr, keccakEvidence)
-            mstore(add(ptr, 0x20), _evidenceUsed.slot)
-            let evidenceUsed := keccak256(ptr, 0x40)
-            sstore(evidenceUsed, 0x01)
+            sstore(keccak256(ptr, 0x40), 0x01)
         }
 
-        bytes memory params = abi.encode(_name, _symbol, _baseUri, _supply);
+        bytes memory params = abi.encodeWithSignature(
+            "issueNFT(string,string,string,uint256)",
+            _name, _symbol, _baseUri, _supply
+        );
         assembly{
-            let ptr := mload(0x40)
-            mstore(ptr, 0xed254cfc) // Keccak256("issueNFT(string,string,string,uint256)")
-            for {let i := 0} lt(i, div(mload(params), 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(params, r)))
-            }
-
             let fmp := mload(0x20)
-            if iszero(delegatecall(gas(), sload(dgFactory.slot), add(ptr, 0x1c), add(mload(params), 0x04), fmp, 0x20)){
+            if iszero(delegatecall(gas(), sload(dgFactory.slot), add(params, 0x20), mload(params), fmp, 0x20)){
                 let err := mload(0x20)
                 mstore(err, Error_Selector)
                 mstore(add(err, 0x20), 0x20)  // string offset
@@ -295,17 +221,9 @@ abstract contract DGIssuer is DidV2Storage {
     function setTokenBaseUri(address DGAddr, string memory baseUri) public onlyOwner {
         // IDeedGrain DG = IDeedGrain(DGAddr);
         // DG.setBaseUri(baseUri);
-        bytes memory params = abi.encode(baseUri);
+        bytes memory params = abi.encodeWithSignature("setBaseUri(string)", baseUri);
         assembly{
-            let ptr := mload(0x20)
-            mstore(ptr, 0xa0bcfc7f) // Keccak256("setBaseUri(string)")
-            let paramLen := mload(params)
-            for {let i := 0} lt(i, div(paramLen, 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(params, r)))
-            }
-            let success := call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+            let success := call(gas(), DGAddr, 0, add(params, 0x20), mload(params), 0, 0)
             if iszero(success){
                 revert(0, 0)
             }
@@ -330,18 +248,19 @@ abstract contract DGIssuer is DidV2Storage {
                 mstore(add(err, 0x60), InsufficientPermission_Err_Message)
                 revert(add(err, 0x1c), sub(0x80, 0x1c))
             }
+        }
+        assembly{
         // IDeedGrainV1 DG = IDeedGrainV1(DGAddr);
         // for (uint i = 0; i < addrs.length; i++) {
         //    DG.mint(addrs[i], tokenId);
         // }
             let addrsLen := mload(addrs)
+            let calld := mload(0x40)
+            mstore(calld, 0x40c10f19) // Keccak256("mint(address,uint256)")
+            mstore(add(calld, 0x40), tokenId)
             for {let i := 0} lt(i, addrsLen){} {
                 i := add(i, 1)
-                let addr := mload(add(addrs, mul(0x20, i)))
-                let calld := mload(0x40)
-                mstore(calld, 0x40c10f19) // Keccak256("mint(address,uint256)")
-                mstore(add(calld, 0x20), addr)
-                mstore(add(calld, 0x40), tokenId)
+                mstore(add(calld, 0x20), mload(add(addrs, mul(0x20, i))))
                 let success := call(gas(), DGAddr, 0, add(calld, 0x1c), sub(0x60, 0x1c), 0, 0)
                 if iszero(success){
                     revert(0, 0)
@@ -361,7 +280,7 @@ abstract contract DGIssuer is DidV2Storage {
         bytes memory data
     ) public {
         assembly{
-            let ptr := mload(0x20)
+            let ptr := mload(0x40)
             mstore(ptr, DGAddr)
             mstore(add(ptr, 0x20), deedGrainAddrToIssuer.slot)
         // require(msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[DGAddr], "caller are not allowed to mint");
@@ -379,16 +298,17 @@ abstract contract DGIssuer is DidV2Storage {
         // for (uint256 i = 0; i < addrs.length; i++) {
         //     DG.mint(addrs[i], tokenId, data);
         // }
-        for (uint256 il = 0; il < addrs.length; il++) {
-            bytes memory params = abi.encode(addrs[il], tokenId, data);
-            assembly{
-                let ptr := mload(0x40)
-                mstore(ptr, 0x94d008ef) // Keccak256("mint(address,uint256,bytes)")
-                let paramLen := mload(params)
-                for {let i := 0} lt(i, add(div(paramLen, 0x20), 1)) {i := add(i, 1)} {
-                    mstore(add(ptr, mul(0x20, add(i, 1))), mload(add(params, mul(0x20, add(i, 1)))))
-                }
-                let success := call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+        bytes memory params = abi.encodeWithSignature(
+            "mint(address,uint256,bytes)",
+            address(0),
+            tokenId,
+            data
+        );
+        assembly{
+            for {let i := 0}lt(i, mload(addrs)){}{
+                i := add(i, 1)
+                mstore(add(params, 0x24), mload(add(addrs, mul(0x20, i))))
+                let success := call(gas(), DGAddr, 0, add(params, 0x20), mload(params), 0, 0)
                 if iszero(success){
                     revert(0, 0)
                 }
@@ -408,7 +328,8 @@ abstract contract DGIssuer is DidV2Storage {
         bytes memory data,
         bytes memory evidence
     ) public {
-        bytes32 kevidence = keccak256(evidence);
+        require(_validate(keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data, block.chainid)), evidence, signer), "InsufficientPermission");
+
         assembly{
         // require(!_evidenceUsed[keccak256(evidence)])
             let ptr := mload(0x40)
@@ -422,55 +343,16 @@ abstract contract DGIssuer is DidV2Storage {
                 mstore(add(err, 0x60), InsufficientPermission_Err_Message)
                 revert(add(err, 0x1c), sub(0x80, 0x1c))
             }
-        }
-
-        bytes memory vparams = abi.encode(
-            keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data, block.chainid)),
-            evidence,
-            signer
-        );
-        assembly {
-        // _validate(hash, _evidence, signer)
-            let ptr := mload(0x40)
-            mstore(ptr, 0x6d050b00) // Keccak256("_validate(bytes32,bytes,address)")
-            for {let i := 0} lt(i, div(mload(vparams), 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(vparams, r)))
-            }
-            pop(staticcall(gas(), address(), add(ptr, 0x1c), add(mload(vparams), 0x04), 0x20, 0x20))
-            if iszero(mload(0x20)) {
-                let err := mload(0x20)
-                mstore(err, Error_Selector)
-                mstore(add(err, 0x20), 0x20)  // string offset
-                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
-                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
-                revert(add(err, 0x1c), sub(0x80, 0x1c))
-            }
-        }
-
-        assembly{
         // _evidenceUsed[keccak256(evidence)] = true;
-            let ptr := mload(0x40)
-            mstore(ptr, kevidence)
-            mstore(add(ptr, 0x20), _evidenceUsed.slot)
-            let evidenceUsed := keccak256(ptr, 0x40)
-            sstore(evidenceUsed, 0x01)
+            sstore(keccak256(ptr, 0x40), 0x01)
         }
 
         // IDeedGrain DG = IDeedGrain(DGAddr);
         // DG.mint(msg.sender, tokenId, data);
-        bytes memory params = abi.encode(msg.sender, tokenId, data);
+        bytes memory params = abi.encodeWithSignature("mint(address,uint256,bytes)",
+            msg.sender, tokenId, data);
         assembly{
-            let ptr := mload(0x40)
-            mstore(ptr, 0x94d008ef) // Keccak256("mint(address,uint256,bytes)")
-            let paramLen := mload(params)
-            for {let i := 0} lt(i, div(paramLen, 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(params, r)))
-            }
-            let success := call(gas(), DGAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+            let success := call(gas(), DGAddr, 0, add(params, 0x20), mload(params), 0, 0)
             if iszero(success){
                 revert(0, 0)
             }
@@ -511,20 +393,11 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param NFTAddr DG NFT contract address
     /// @param baseUri All of the NFT's baseuri
     function setNFTBaseUri(address NFTAddr, string memory baseUri) public onlyOwner {
-        bytes memory params = abi.encode(baseUri);
-        assembly{
         // IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
         // NFT.setBaseUri(baseUri);
-            let ptr := mload(0x20)
-            mstore(ptr, 0xa0bcfc7f) // Keccak256("setBaseUri(string)")
-
-            let paramLen := mload(params)
-            for {let i := 0} lt(i, div(paramLen, 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(params, r)))
-            }
-            let success := call(gas(), NFTAddr, 0, add(ptr, 0x1c), add(paramLen, 0x04), 0, 0)
+        bytes memory params = abi.encodeWithSignature("setBaseUri(string)", baseUri);
+        assembly{
+            let success := call(gas(), NFTAddr, 0, add(params, 0x20), mload(params), 0, 0)
             if iszero(success){
                 revert(0, 0)
             }
@@ -558,14 +431,12 @@ abstract contract DGIssuer is DidV2Storage {
         // for (uint256 i = 0; i < addrs.length; i++) {
         //     NFT.mint(addrs[i], sid);
         // }
-            let addrsLen := mload(addrs)
-            for {let i := 0} lt(i, addrsLen) {}{
+            let calld := mload(0x40)
+            mstore(calld, 0x40c10f19) // Keccak256("mint(address,uint256)")
+            mstore(add(calld, 0x40), sid)
+            for {let i := 0} lt(i, mload(addrs)) {}{
                 i := add(i, 1)
-                let addr := mload(add(addrs, mul(0x20, i)))
-                let calld := mload(0x40)
-                mstore(calld, 0x40c10f19) // Keccak256("mint(address,uint256)")
-                mstore(add(calld, 0x20), addr)
-                mstore(add(calld, 0x40), sid)
+                mstore(add(calld, 0x20), mload(add(addrs, mul(0x20, i))))
                 let success := call(gas(), NFTAddr, 0, add(calld, 0x1c), sub(0x60, 0x1c), 0, 0)
                 if iszero(success){
                     revert(0, 0)
@@ -583,12 +454,11 @@ abstract contract DGIssuer is DidV2Storage {
         uint256 sid,
         bytes memory evidence
     ) public {
-        bytes32 keccakEvidence;
+        require(_validate(keccak256(abi.encodePacked(msg.sender, NFTAddr, sid, block.chainid)), evidence, signer), "InsufficientPermission");
         assembly{
         // require(!_evidenceUsed[keccak256(evidence)])
             let ptr := mload(0x40)
-            keccakEvidence := keccak256(add(evidence, 0x20), mload(evidence))
-            mstore(ptr, keccakEvidence)
+            mstore(ptr, keccak256(add(evidence, 0x20), mload(evidence)))
             mstore(add(ptr, 0x20), _evidenceUsed.slot)
             if sload(keccak256(ptr, 0x40)){
                 let err := mload(0x20)
@@ -598,41 +468,8 @@ abstract contract DGIssuer is DidV2Storage {
                 mstore(add(err, 0x60), InsufficientPermission_Err_Message)
                 revert(add(err, 0x1c), sub(0x80, 0x1c))
             }
-        }
-
-        bytes memory vparams = abi.encode(
-            keccak256(abi.encodePacked(msg.sender, NFTAddr, sid, block.chainid)),
-            evidence,
-            signer
-        );
-
-        assembly {
-        // _validate(hash, evidence, signer)
-            let ptr := mload(0x40)
-            mstore(ptr, 0x6d050b00) // Keccak256("_validate(bytes32,bytes,address)")
-            for {let i := 0} lt(i, div(mload(vparams), 0x20)) {} {
-                i := add(i, 1)
-                let r := mul(0x20, i)
-                mstore(add(ptr, r), mload(add(vparams, r)))
-            }
-            pop(staticcall(gas(), address(), add(ptr, 0x1c), add(mload(vparams), 0x04), 0x20, 0x20))
-            if iszero(mload(0x20)) {
-                let err := mload(0x20)
-                mstore(err, Error_Selector)
-                mstore(add(err, 0x20), 0x20)  // string offset
-                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
-                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
-                revert(add(err, 0x1c), sub(0x80, 0x1c))
-            }
-        }
-
-        assembly{
         // _evidenceUsed[keccak256(evidence)] = true;
-            let ptr := mload(0x40)
-            mstore(ptr, keccakEvidence)
-            mstore(add(ptr, 0x20), _evidenceUsed.slot)
-            let evidenceUsed := keccak256(ptr, 0x40)
-            sstore(evidenceUsed, 0x01)
+            sstore(keccak256(ptr, 0x40), 0x01)
         }
 
         // IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
@@ -654,7 +491,7 @@ abstract contract DGIssuer is DidV2Storage {
         bytes32 message,
         bytes memory signature,
         address signer
-    ) internal view returns (bool) {
+    ) internal view returns (bool res) {
         assembly {
         // require(signer != address(0) && signature.length == 65);
             if or(eq(signer, 0x0), iszero(eq(mload(signature), 65))){
@@ -667,8 +504,6 @@ abstract contract DGIssuer is DidV2Storage {
             }
 
         // Ensure that first word of scratch space is empty.
-            mstore(0, 0)
-
             let r := mload(add(signature, 0x20))
             let s := mload(add(signature, 0x40))
             let v := add(byte(0, mload(add(signature, 0x60))), 27)
@@ -681,12 +516,11 @@ abstract contract DGIssuer is DidV2Storage {
             mstore(add(hashWithSig, 0x40), r)
             mstore(add(hashWithSig, 0x60), s)
 
-            pop(staticcall(gas(), 0x01, hashWithSig, 0x80, 0, 0x20))
+            let recoveredSigner := mload(0x20)
+            pop(staticcall(gas(), 0x01, hashWithSig, 0x80, recoveredSigner, 0x20))
 
-            let recoveredSigner := mload(0)
         // return signer == owner, "Invalid signature");
-            mstore(0x20, eq(signer, recoveredSigner))
-            return (0x20, 0x20)
+            res := eq(signer, mload(recoveredSigner))
         }
     }
 }
