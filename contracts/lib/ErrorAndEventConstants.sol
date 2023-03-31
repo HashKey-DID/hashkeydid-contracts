@@ -59,3 +59,15 @@ uint256 constant RegisteredAddress_Err_Length = 0x11;
  */
 uint256 constant NontransferableDID_Err_Message = 0x4e6f6e7472616e7366657261626c654449440000000000000000000000000000;
 uint256 constant NontransferableDID_Err_Length = 0x12;
+
+/**
+ * @dev Event IssueDG(address, address), emit when issue a new DeedGrain
+ * ERC1155 contract. 
+ */
+uint256 constant EventIssueDG = 0xc05872623594b1c2574e0531d0cc06b56ceb48baddce03b13163aa822ddfd52c;
+
+/**
+ * @dev Event IssueDG(address, address), emit when issue a new DeedGrain
+ * ERC721 contract. 
+ */
+uint256 constant EventIssueNFT = 0xf9d4b55952c081f85101e9a2f8c6d5843afd8c96692b343ae78aa9f653090c39;

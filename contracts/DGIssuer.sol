@@ -89,10 +89,7 @@ abstract contract DGIssuer is DidV2Storage {
             sstore(keccak256(fmp, 0x40), caller())
 
         // emit IssueDG(msg.sender, DGAddr);
-            log2(fmp, 0x20,
-            0xc05872623594b1c2574e0531d0cc06b56ceb48baddce03b13163aa822ddfd52c, // event topic0
-            // hash string is keccak256("IssueDG(address,address)")
-            caller())
+            log2(fmp, 0x20, EventIssueDG, caller())
         }
     }
 
@@ -142,12 +139,7 @@ abstract contract DGIssuer is DidV2Storage {
             sstore(keccak256(fmp, 0x40), caller())
 
         //emit IssueNFT(msg.sender, DGNFTAddr);
-            log2(
-            fmp, // data
-            0x20,
-            0xf9d4b55952c081f85101e9a2f8c6d5843afd8c96692b343ae78aa9f653090c39, // event topic0, hash string is keccak256("IssueNFT(address,address)")
-            caller() // topic1
-            )
+            log2(fmp, 0x20, EventIssueNFT, caller())
         }
     }
 
