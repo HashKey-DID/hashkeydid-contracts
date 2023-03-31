@@ -80,11 +80,35 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     }
 
     function _mintDid(address to, string memory did, uint256 expiredTimestamp, bytes memory evidence, string calldata avatar) internal {
-        require(expiredTimestamp >= block.timestamp, "evidence expired");
-        require(this.balanceOf(to) == 0, "addr claimed");
+        assembly{
+        // require(expiredTimestamp >= block.timestamp, "evidence expired");
+            if lt(expiredTimestamp, timestamp()){
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), InvalidEvidence_Err_Length)
+                mstore(add(err, 0x60), InvalidEvidence_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
+
+        // require(this.balanceOf(to) == 0, "addr claimed");
+            let b := mload(0x40)
+            mstore(b, 0x70a08231)
+            mstore(add(b, 0x20), to)
+            let res := mload(0x20)
+            pop(call(gas(), address(), 0, add(b, 0x1c), sub(0x40, 0x1c), res, 0x20))
+            if gt(mload(res), 0x00){
+                mstore(0, Error_Selector)
+                mstore(0x20, 0x20)
+                mstore(0x40, RegisteredAddress_Err_Message)
+                mstore(0x60, RegisteredAddress_Err_Length)
+                revert(0x1c, 0x64)
+            }
+        }
         verifyDIDFormat(did);
         require(did2TokenId[did] == 0, "did used");
-        require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer));
+        _validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer);
+
         uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
         did2TokenId[did] = tokenId;
         tokenId2Did[tokenId] = did;
@@ -106,10 +130,23 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         KYCInfo[] memory KYCInfos,
         bytes[] memory evidences) external {
         require(msg.sender == didSync || msg.sender == didMinter, "caller is not didSync");
-        require(this.balanceOf(user) == 0, "addr claimed");
+        assembly{
+        // require(this.balanceOf(to) == 0, "addr claimed");
+            let b := mload(0x40)
+            mstore(b, 0x70a08231)
+            mstore(add(b, 0x20), user)
+            let res := mload(0x20)
+            pop(call(gas(), address(), 0, add(b, 0x1c), sub(0x40, 0x1c), res, 0x20))
+            if gt(mload(res), 0x00){
+                mstore(0, Error_Selector)
+                mstore(0x20, 0x20)
+                mstore(0x40, RegisteredAddress_Err_Message)
+                mstore(0x60, RegisteredAddress_Err_Length)
+                revert(0x1c, 0x64)
+            }
+        }
         verifyDIDFormat(did);
         require(did2TokenId[did] == 0, "did used");
-
         did2TokenId[did] = tokenId;
         tokenId2Did[tokenId] = did;
 
@@ -261,8 +298,8 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         uint256 tokenId,
         uint256
     )
-    internal
     override
+    internal
     {
         require(from == address(0), "cannot transfer");
         super._beforeTokenTransfer(from, to, tokenId, 1);

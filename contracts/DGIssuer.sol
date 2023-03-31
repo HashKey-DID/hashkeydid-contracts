@@ -61,7 +61,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
-        require(_validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "InsufficientPermission1");
+        _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer);
 
         assembly{
         // require(!_evidenceUsed[keccak256(_evidence)])
@@ -116,7 +116,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _supply DG NFT supply
     function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply) public {
-        require(_validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "InsufficientPermission");
+        _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer);
 
         assembly{
         // require(!_evidenceUsed[keccak256(_evidence)])
@@ -327,7 +327,7 @@ abstract contract DGIssuer is DidV2Storage {
         bytes memory data,
         bytes memory evidence
     ) public {
-        require(_validate(keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data, block.chainid)), evidence, signer), "InsufficientPermission");
+        _validate(keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data, block.chainid)), evidence, signer);
 
         assembly{
         // require(!_evidenceUsed[keccak256(evidence)])
@@ -453,7 +453,7 @@ abstract contract DGIssuer is DidV2Storage {
         uint256 sid,
         bytes memory evidence
     ) public {
-        require(_validate(keccak256(abi.encodePacked(msg.sender, NFTAddr, sid, block.chainid)), evidence, signer), "InsufficientPermission");
+        _validate(keccak256(abi.encodePacked(msg.sender, NFTAddr, sid, block.chainid)), evidence, signer);
         assembly{
         // require(!_evidenceUsed[keccak256(evidence)])
             let ptr := mload(0x40)
@@ -490,7 +490,7 @@ abstract contract DGIssuer is DidV2Storage {
         bytes32 message,
         bytes memory signature,
         address signer
-    ) internal view returns (bool res) {
+    ) internal view returns (bool) {
         assembly {
         // require(signer != address(0) && signature.length == 65);
             if or(eq(signer, 0x0), iszero(eq(mload(signature), 65))){
@@ -519,7 +519,15 @@ abstract contract DGIssuer is DidV2Storage {
             pop(staticcall(gas(), 0x01, hashWithSig, 0x80, recoveredSigner, 0x20))
 
         // return signer == owner, "Invalid signature");
-            res := eq(signer, mload(recoveredSigner))
+            if iszero(eq(signer, mload(recoveredSigner))){
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), InvalidEvidence_Err_Length)
+                mstore(add(err, 0x60), InvalidEvidence_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
         }
+        return true;
     }
 }
