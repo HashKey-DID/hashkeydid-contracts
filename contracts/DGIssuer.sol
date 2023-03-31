@@ -36,7 +36,7 @@ abstract contract DGIssuer is DidV2Storage {
             let ptr := mload(0x40)
             mstore(ptr, DGAddr)
             mstore(add(ptr, 0x20), deedGrainAddrToIssuer.slot)
-            //require(msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[DGAddr],"caller are not allowed to set supply");
+            //require(msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[DGAddr]);
             if or(eq(sload(dgMinter.slot), caller()), eq(sload(keccak256(ptr, 0x40)), caller())){
                 permitted := 0x01
             }
