@@ -126,7 +126,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
 
     /// @dev Verify did format
     /// @param did Did name
-    function verifyDIDFormat(string memory did) public pure returns (bool) {
+    function verifyDIDFormat(string memory did) public pure returns (bool res) {
         assembly{
             let fmp := mload(0x20)
 
@@ -172,14 +172,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
             //     return true;
             // }
             let endkey := mload(add(add(did, 0x20), i))
-            if eq(endkey, 0x2e6b657900000000000000000000000000000000000000000000000000000000){
-                mstore(fmp, 0x01)
-                return (fmp, 0x20)
-            }
-
-            // return false;
-            mstore(fmp, 0x00)
-            return (fmp, 0x20)
+            res := eq(endkey, 0x2e6b657900000000000000000000000000000000000000000000000000000000)
         }
     }
 
@@ -253,13 +246,14 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256 tokenId
+        uint256 tokenId,
+        uint256
     )
     internal
     override
     {
         require(from == address(0), "cannot transfer");
-        super._beforeTokenTransfer(from, to, tokenId);
+        super._beforeTokenTransfer(from, to, tokenId, 1);
     }
 
     function withdraw() public onlyOwner {
