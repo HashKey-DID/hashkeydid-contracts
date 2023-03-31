@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import "./lib/ErrorConstants.sol";
 import "./DidStorage.sol";
+import "./lib/ErrorAndEventConstants.sol";
+import {
+    _revertOwnershipMismatch,
+    _revertInvalidEvidence,
+    _revertDeedGrainIssueFailed,
+    _revertInsufficientPermission,
+    _revertZeroAddress
+} from "./lib/Errors.sol";
 
 abstract contract DGIssuer is DidV2Storage {
     /// @dev Emitted when issue DG successfully
@@ -13,16 +20,8 @@ abstract contract DGIssuer is DidV2Storage {
 
     /// @dev Only owner
     modifier onlyOwner() {
-        // require(msg.sender == owner, "caller is not the owner");
-        assembly{
-            if iszero(eq(caller(), sload(owner.slot))) {
-                let err := mload(0x20)
-                mstore(err, Error_Selector)
-                mstore(add(err, 0x20), 0x20)  // string offset
-                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
-                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
-                revert(add(err, 0x1c), sub(0x80, 0x1c))
-            }
+        if (msg.sender != owner) {
+            _revertOwnershipMismatch();
         }
         _;
     }
@@ -63,23 +62,11 @@ abstract contract DGIssuer is DidV2Storage {
     function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
         _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer);
 
-        assembly{
-        // require(!_evidenceUsed[keccak256(_evidence)])
-            let ptr := mload(0x40)
-            mstore(ptr, keccak256(add(_evidence, 0x20), mload(_evidence)))
-            mstore(add(ptr, 0x20), _evidenceUsed.slot)
-            if sload(keccak256(ptr, 0x40)){
-                let err := mload(0x20)
-                mstore(err, Error_Selector)
-                mstore(add(err, 0x20), 0x20)  // string offset
-                mstore(add(err, 0x40), InsufficientPermission_Err_Length)
-                mstore(add(err, 0x60), InsufficientPermission_Err_Message)
-                revert(add(err, 0x1c), sub(0x80, 0x1c))
-            }
-
-        // _evidenceUsed[keccak256(_evidence)] = true;
-            sstore(keccak256(ptr, 0x40), 0x01)
+        bytes32 evidenceHash = keccak256(_evidence);
+        if (_evidenceUsed[evidenceHash]) {
+            _revertInvalidEvidence();
         }
+        _evidenceUsed[evidenceHash] = true;
 
         bytes memory params = abi.encodeWithSignature(
             "issueDG(string,string,string,bool)",
