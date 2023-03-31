@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 pragma solidity ^0.8.0;
 
+import "./lib/ErrorConstants.sol";
 import "./interfaces/IResolver.sol";
 import "./DGIssuer.sol";
+
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
@@ -79,17 +81,15 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
 
     function _mintDid(address to, string memory did, uint256 expiredTimestamp, bytes memory evidence, string calldata avatar) internal {
         require(expiredTimestamp >= block.timestamp, "evidence expired");
-        require(!addrClaimed[to], "addr claimed");
-        require(!didClaimed[did], "did used");
-        require(verifyDIDFormat(did), "illegal did");
+        require(this.balanceOf(to) == 0, "addr claimed");
+        verifyDIDFormat(did);
+        require(did2TokenId[did] == 0, "did used");
         require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer));
-        addrClaimed[to] = true;
-        didClaimed[did] = true;
         uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
         did2TokenId[did] = tokenId;
         tokenId2Did[tokenId] = did;
-
         _mint(to, tokenId);
+
         if (bytes(avatar).length > 0) {
             IResolver(resolver).setAvatar(tokenId, avatar);
         }
@@ -106,12 +106,10 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         KYCInfo[] memory KYCInfos,
         bytes[] memory evidences) external {
         require(msg.sender == didSync || msg.sender == didMinter, "caller is not didSync");
-        require(!addrClaimed[user], "addr claimed");
-        require(!didClaimed[did], "did used");
-        require(verifyDIDFormat(did), "illegal did");
+        require(this.balanceOf(user) == 0, "addr claimed");
+        verifyDIDFormat(did);
+        require(did2TokenId[did] == 0, "did used");
 
-        addrClaimed[user] = true;
-        didClaimed[did] = true;
         did2TokenId[did] = tokenId;
         tokenId2Did[tokenId] = did;
 
@@ -128,25 +126,27 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     /// @param did Did name
     function verifyDIDFormat(string memory did) public pure returns (bool res) {
         assembly{
-            let fmp := mload(0x20)
-
-            // length within user [1,50] + .key [4] = [5, 54]
+        // length within user [1,50] + .key [4] = [5, 54]
             let didLength := mload(did)
-            // if ((bDid.length < 5) || (bDid.length > 54)) {
-            //     return false;
-            // }
+        // if ((bDid.length < 5) || (bDid.length > 54)) {
+        //     return false;
+        // }
             if or(lt(didLength, 0x05), gt(didLength, 0x36)){
-                mstore(fmp, 0x00)
-                return (fmp, 0x20)
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), IllegalDIDName_Err_Length)
+                mstore(add(err, 0x60), IllegalDIDName_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
             }
 
-            // // allow 0-9/a-z
-            // for (uint256 i = 0; i < bDid.length - 4; i++) {
-            //     uint8 c = uint8(bDid[i]);
-            //     if (((c < 48) || (c > 122)) || ((c > 57) && (c < 97))) {
-            //         return false;
-            //     }
-            // }
+        // // allow 0-9/a-z
+        // for (uint256 i = 0; i < bDid.length - 4; i++) {
+        //     uint8 c = uint8(bDid[i]);
+        //     if (((c < 48) || (c > 122)) || ((c > 57) && (c < 97))) {
+        //         return false;
+        //     }
+        // }
             let i := 0
             let d := mload(add(did, 0x20))
             for {} lt(i, sub(didLength, 4)){i := add(i, 1)}
@@ -156,24 +156,36 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
                 or(lt(t, 0x30), gt(t, 0x7a)),
                 and(gt(t, 0x39), lt(t, 0x61))
                 ){
-                    mstore(fmp, 0x00)
-                    return (fmp, 0x20)
+                    let err := mload(0x20)
+                    mstore(err, Error_Selector)
+                    mstore(add(err, 0x20), 0x20)  // string offset
+                    mstore(add(err, 0x40), IllegalDIDName_Err_Length)
+                    mstore(add(err, 0x60), IllegalDIDName_Err_Message)
+                    revert(add(err, 0x1c), sub(0x80, 0x1c))
                 }
             }
 
-            // // must end with ".key"
-            // // 46:. 107:k, 101:e 121:y
-            // if !(
-            //     (uint8(bDid[bDid.length - 4]) != 46) ||
-            //     (uint8(bDid[bDid.length - 3]) != 107) ||
-            //     (uint8(bDid[bDid.length - 2]) != 101) ||
-            //     (uint8(bDid[bDid.length - 1]) != 121)
-            // ) {
-            //     return true;
-            // }
+        // // must end with ".key"
+        // // 46:. 107:k, 101:e 121:y
+        // if !(
+        //     (uint8(bDid[bDid.length - 4]) != 46) ||
+        //     (uint8(bDid[bDid.length - 3]) != 107) ||
+        //     (uint8(bDid[bDid.length - 2]) != 101) ||
+        //     (uint8(bDid[bDid.length - 1]) != 121)
+        // ) {
+        //     return true;
+        // }
             let endkey := mload(add(add(did, 0x20), i))
-            res := eq(endkey, 0x2e6b657900000000000000000000000000000000000000000000000000000000)
+            if iszero(eq(endkey, 0x2e6b657900000000000000000000000000000000000000000000000000000000)){
+                let err := mload(0x20)
+                mstore(err, Error_Selector)
+                mstore(add(err, 0x20), 0x20)  // string offset
+                mstore(add(err, 0x40), IllegalDIDName_Err_Length)
+                mstore(add(err, 0x60), IllegalDIDName_Err_Message)
+                revert(add(err, 0x1c), sub(0x80, 0x1c))
+            }
         }
+        return true;
     }
 
     /// @dev Did add address authorization

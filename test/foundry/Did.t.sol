@@ -79,13 +79,13 @@ contract DidV2Test is Test {
         uint256 KYCId = 1;
         KYCProviders.push(signer);
         DidV2Storage.KYCInfo memory info = DidV2Storage.KYCInfo(true, block.timestamp, block.timestamp + 1 days);
+        KYCInfos.push(info);
+        KYCIds.push(KYCId);
         bytes32 hash = keccak256(abi.encodePacked(tokenId, KYCProviders[0], KYCIds[0], KYCInfos[0].status, KYCInfos[0].updateTime, KYCInfos[0].expireTime));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPri, hash);
         v = v - 27;
         bytes memory signature = abi.encodePacked(r,s,v);
 
-        KYCIds.push(KYCId);
-        KYCInfos.push(info);
         evidences.push(signature);
 
         did.mintDidLZ(tokenId, address(this), "did.key", "avatar.com", KYCProviders, KYCIds, KYCInfos, evidences);

@@ -29,3 +29,33 @@ uint256 constant DeedGrainIssueFailed_Err_Length = 0x14;
  */
 uint256 constant InsufficientPermission_Err_Message = 0x496e73756666696369656e745065726d697373696f6e00000000000000000000;
 uint256 constant InsufficientPermission_Err_Length = 0x16;
+
+/**
+ * @dev Revert with an error when input a zero address which is not invalid.
+ */
+uint256 constant ZeroAddress_Err_Message = 0x5a65726f41646472657373000000000000000000000000000000000000000000;
+uint256 constant ZeroAddress_Err_Length = 0x0b;
+
+/**
+ * @dev Revert with an error when DID name is illegal.
+ */
+uint256 constant IllegalDIDName_Err_Message = 0x496c6c6567616c4449444e616d65000000000000000000000000000000000000;
+uint256 constant IllegalDIDName_Err_Length = 0x0e;
+
+/**
+ * @dev Revert with an error when DID name is already registered by others.
+ */
+uint256 constant RegisteredDIDName_Err_Message = 0x526567697374657265644449444e616d65000000000000000000000000000000;
+uint256 constant RegisteredDIDName_Err_Length = 0x11;
+
+/**
+ * @dev Revert with an error when the caller has been registered.
+ */
+uint256 constant RegisteredAddress_Err_Message = 0x5265676973746572656441646472657373000000000000000000000000000000;
+uint256 constant RegisteredAddress_Err_Length = 0x11;
+
+/**
+ * @dev Revert with an error when user try to transfer DID.
+ */
+uint256 constant NontransferableDID_Err_Message = 0x4e6f6e7472616e7366657261626c654449440000000000000000000000000000;
+uint256 constant NontransferableDID_Err_Length = 0x12;
