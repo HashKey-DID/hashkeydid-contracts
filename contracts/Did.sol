@@ -295,14 +295,13 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256 tokenId,
-        uint256
+        uint256 tokenId
     )
     override
     internal
     {
         require(from == address(0), "cannot transfer");
-        super._beforeTokenTransfer(from, to, tokenId, 1);
+        super._beforeTokenTransfer(from, to, tokenId);
     }
 
     function withdraw() public onlyOwner {
