@@ -13,6 +13,7 @@ artifacts
 .deps
 .openzeppelin
 package-lock.json
+scripts
 script
 task
 hardhat.config.js
