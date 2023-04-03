@@ -45,12 +45,12 @@ contract DeedGrainNFT is ERC721 {
     onlyControllers
     returns (uint256)
     {
-        uint256 tokenId;
-        assembly{
         // require(totalSupply + 1 <= supply, "insufficient supply");
         // totalSupply++;
         // uint256 tokenId = totalSupply;
         // sids[tokenId] = sid;
+        uint256 tokenId;
+        assembly{
             tokenId := add(sload(totalSupply.slot), 1)
             if gt(tokenId, sload(supply.slot)){
                 revert(0, 0) //TODO
@@ -85,8 +85,9 @@ contract DeedGrainNFT is ERC721 {
             }
         }
 
+        uint256 tempTotalSupply = totalSupply + 1;
         for (uint256 i = 0; i < len; i++) {
-            uint256 tokenId = totalSupply + i + 1;
+            uint256 tokenId = tempTotalSupply + i;
             _mint(addrs[i], tokenId);
             sids[tokenId] = seriesIds[i];
         }
