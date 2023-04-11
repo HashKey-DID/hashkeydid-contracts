@@ -492,17 +492,20 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256 tokenId
+        uint256 tokenId,
+        uint256
     )
     internal
     override
     {
         require(from == address(0), "cannot transfer");
-        super._beforeTokenTransfer(from, to, tokenId);
+        super._beforeTokenTransfer(from, to, tokenId, 1);
     }
 
     function withdraw() public onlyOwner {
-        payable(msg.sender).transfer(address(this).balance);
+        uint256 balance = address(this).balance;
+        (bool succeed, ) = payable(msg.sender).call{value: balance}("");
+        require(succeed, "Failed to withdraw");
     }
 
     receive() external payable {}
