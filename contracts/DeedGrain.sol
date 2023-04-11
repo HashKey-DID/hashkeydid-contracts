@@ -22,12 +22,12 @@ contract DeedGrain is ERC1155Supply {
         _;
     }
 
-    constructor(string memory _name, string memory _symbol, string memory _uri, bool _transferable) ERC1155(""){
+    constructor(string memory _name, string memory _symbol, string memory _uri, bool _transferable, address _issuer) ERC1155(""){
         name = _name;
         symbol = _symbol;
         transferable = _transferable;
         controller = msg.sender;
-        issuer = tx.origin;
+        issuer = _issuer;
         setBaseUri(_uri);
     }
 

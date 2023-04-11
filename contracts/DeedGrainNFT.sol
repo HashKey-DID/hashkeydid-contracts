@@ -26,12 +26,13 @@ contract DeedGrainNFT is ERC721 {
         string memory _name,
         string memory _symbol,
         string memory _uri,
-        uint256 _supply
+        uint256 _supply,
+        address _issuer
     ) ERC721("", "") {
         _deedgrainName = _name;
         _deedgrainSymbol = _symbol;
         controller = msg.sender;
-        issuer = tx.origin;
+        issuer = _issuer;
         supply = _supply;
         _baseMetadataURI = _uri;
     }

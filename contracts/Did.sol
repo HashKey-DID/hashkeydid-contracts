@@ -47,7 +47,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _baseUri ERC1155 NFT baseUri
     /// @param _evidence Signature by HashKeyDID
     /// @param _transferable DG transferable
-    function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable) public {
+    function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable, address _issuer) public {
         require( !_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
         _evidenceUsed[keccak256(_evidence)] = true;
         bool success;
@@ -58,7 +58,8 @@ abstract contract DGIssuer is DidV2Storage {
                 _name,
                 _symbol,
                 _baseUri,
-                _transferable
+                _transferable,
+                _issuer
             )
         );
         require(success, "issueDG failed");
@@ -73,7 +74,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _baseUri ERC721 NFT baseUri
     /// @param _evidence Signature by HashKeyDID
     /// @param _supply DG NFT supply
-    function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply) public {
+    function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply, address _issuer) public {
         require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
         _evidenceUsed[keccak256(_evidence)] = true;
         bool success;
@@ -84,7 +85,8 @@ abstract contract DGIssuer is DidV2Storage {
                 _name,
                 _symbol,
                 _baseUri,
-                _supply
+                _supply,
+                _issuer
             )
         );
         require(success, "issueDGNFT failed");

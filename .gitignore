@@ -15,9 +15,18 @@ artifacts
 package-lock.json
 script
 task
+hardhat.config.ts
 hardhat.config.js
 deploy.sh
 deployments
 setAddrs.sh
 upgrade.sh
 remix-compiler.config.js
+
+#Foundry files
+out
+cache_forge
+
+#zksync files
+artifacts-zk
+cache-zk
