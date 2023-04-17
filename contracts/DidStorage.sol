@@ -13,9 +13,10 @@ contract DidV2Storage {
     address public owner;
 
     string public baseURI_;
-    
-    mapping(string => bool) public didClaimed;
 
+    // Deprecated
+    mapping(string => bool) public didClaimed;
+    // Deprecated
     mapping(address => bool) public addrClaimed;
 
     mapping(uint256 => string) public tokenId2Did;
