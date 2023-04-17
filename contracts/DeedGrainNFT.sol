@@ -12,8 +12,6 @@ contract DeedGrainNFT is ERC721 {
         _;
     }
 
-    string private _deedgrainName;
-    string private _deedgrainSymbol;
     string private _baseMetadataURI;
     uint256 public totalSupply;
     uint256 public supply;
@@ -27,9 +25,7 @@ contract DeedGrainNFT is ERC721 {
         string memory _symbol,
         string memory _uri,
         uint256 _supply
-    ) ERC721("", "") {
-        _deedgrainName = _name;
-        _deedgrainSymbol = _symbol;
+    ) ERC721(_name, _symbol) {
         controller = msg.sender;
         issuer = tx.origin;
         supply = _supply;
@@ -95,20 +91,6 @@ contract DeedGrainNFT is ERC721 {
     {
         require(tokenId <= totalSupply, "NFT does not exist");
         return string(abi.encodePacked(_baseMetadataURI, _uint2str(tokenId)));
-    }
-
-    /**
-     * @dev See {IERC721Metadata-name}.
-     */
-    function name() public view override returns (string memory) {
-        return _deedgrainName;
-    }
-
-    /**
-     * @dev See {IERC721Metadata-symbol}.
-     */
-    function symbol() public view override returns (string memory) {
-        return _deedgrainSymbol;
     }
 
     function _uint2str(uint256 _i) internal pure returns (string memory) {

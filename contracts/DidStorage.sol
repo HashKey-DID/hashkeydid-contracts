@@ -13,14 +13,14 @@ contract DidV2Storage {
     address public owner;
 
     string public baseURI_;
-    
-    mapping(string => bool) public didClaimed;
 
-    mapping(address => bool) public addrClaimed;
+    mapping(string => bool)  _didClaimed;
+
+    mapping(address => bool)  _addrClaimed;
 
     mapping(uint256 => string) public tokenId2Did;
 
-    mapping(string => uint256) public did2TokenId;
+    mapping(string => uint256) _did2TokenId;
 
     address public signer;
 
