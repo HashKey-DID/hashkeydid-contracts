@@ -1,26 +1,44 @@
 import hre = require("hardhat");
 import {ethers} from "ethers";
 
-
 async function main() {
-    const didV2Factory = await hre.ethers.getContractFactory("DidV2");
-    const didV2 = await didV2Factory.deploy();
-
-    await didV2.deployed();
     const network = await hre.ethers.provider.getNetwork()
     const chainId = network.chainId;
     const accounts = await hre.ethers.getSigners();
     const deployer = accounts[0].address;
-    console.log(deployer);
+
+    const tokenTestFactory = await hre.ethers.getContractFactory("TokenTest");
+    const erc20token = await tokenTestFactory.deploy();
+    const balance = await erc20token.balanceOf(deployer);
+
+    const didV2Factory = await hre.ethers.getContractFactory("DidV2");
+    const didV2 = await didV2Factory.deploy();
+    await didV2.deployed();
+
+    await erc20token.approve(didV2.address, balance);
+
 
     await didV2.initialize("tt", "tt", "ttr", deployer);
     await didV2.setSigner("0x8A036Bb39a8B1b19Bb24271E6Bd8ffEd0BDCc513");
 
-    const sig = signMsgForMint(deployer, chainId, 9999999999, "kasdfg.key", "0x0000000000000000000000000000000000000000", 0);
+    const sig = signMsgForMint(deployer, chainId, 9999999999, "kasdfg.key", erc20token.address, 1000000000000);
 
-    const tx = await didV2.claim(9999999999, "kasdfg.key", "0x0000000000000000000000000000000000000000", 0, sig, "");
+    const tx = await didV2.claim(9999999999, "kasdfg.key", erc20token.address, 1000000000000, sig, "");
     const txr = await tx.wait();
+
     console.log(txr.gasUsed)
+
+    const balancedid1 = await erc20token.balanceOf(didV2.address);
+    console.log(balancedid1)
+    const balanceme1 = await erc20token.balanceOf(deployer);
+    console.log(balanceme1)
+
+    await didV2.withdraw(erc20token.address)
+
+    const balancedid2 = await erc20token.balanceOf(didV2.address);
+    console.log(balancedid2)
+    const balanceme2 = await erc20token.balanceOf(deployer);
+    console.log(balanceme2)
 }
 
 function signMsgForMint(owner: string, chainId: number, expiredTimestamp: number, did: string, token: string, amount: number): string {
