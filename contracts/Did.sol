@@ -95,12 +95,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         require(!_didClaimed[did] && !_exists(tokenId), "did used");
         require(verifyDIDFormat(did), "illegal did");
         require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, token, amount)), evidence, signer), "invalid evidence");
-
-        //  addrClaimed[user] = true;
-        //  did2TokenId[did] = tokenId;
-        //  didClaimed[did] = true;
         tokenId2Did[tokenId] = did;
-
         _mint(to, tokenId);
         if (bytes(avatar).length > 0) {
             IResolver(resolver).setAvatar(tokenId, avatar);
