@@ -128,7 +128,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         }
     }
 
-    function Did2TokenId(string memory did) public view returns (uint256) {
+    function did2TokenId(string memory did) public view returns (uint256) {
         uint256 tokenId = _did2TokenId[did];
         if (tokenId == 0) {
             tokenId = uint256(keccak256(abi.encodePacked(did)));
@@ -137,7 +137,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         return tokenId;
     }
 
-    function DidClaimed(string memory did) public view returns (bool) {
+    function didClaimed(string memory did) public view returns (bool) {
         uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
         return _didClaimed[did] || _exists(tokenId);
     }
