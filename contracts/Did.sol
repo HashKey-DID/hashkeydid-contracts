@@ -1,281 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import "./interfaces/IDeedGrain.sol";
-import "./interfaces/IDeedGrainV1.sol";
-import "./interfaces/IDeedGrainNFT.sol";
 import "./interfaces/IResolver.sol";
-import "./DidStorage.sol";
+import "./DGIssuer.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
-
-abstract contract DGIssuer is DidV2Storage {
-    /// @dev Emitted when issue DG successfully
-    event IssueDG(address indexed, address);
-
-    /// @dev Emitted when issue NFT successfully
-    event IssueNFT(address indexed, address);
-
-    /// @dev Only owner
-    modifier onlyOwner() {
-        require(msg.sender == owner, "caller is not the owner");
-        _;
-    }
-
-    /// @dev Set DG airdrop address
-    /// @param minter DG airdrop address
-    function setDGMinterAddr(address minter) public onlyOwner {
-        dgMinter = minter;
-    }
-
-    /// @dev Set Resolver address
-    /// @param _resolver Resolver address
-    function setResolverAddr(address _resolver) public onlyOwner {
-        resolver = _resolver;
-    }
-
-    /// @dev Set DID sync address
-    /// @param _didSync DID sync address
-    function setDidSync(address _didSync) public onlyOwner {
-        didSync = _didSync;
-    }
-
-    /// @dev Issue DG token
-    /// @param _name ERC1155 NFT name
-    /// @param _symbol ERC1155 NFT symbol
-    /// @param _baseUri ERC1155 NFT baseUri
-    /// @param _evidence Signature by HashKeyDID
-    /// @param _transferable DG transferable
-    function issueDG(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, bool _transferable, address _issuer) public {
-        require( !_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
-        _evidenceUsed[keccak256(_evidence)] = true;
-        bool success;
-        bytes memory data;
-        (success, data) = dgFactory.delegatecall(
-            abi.encodeWithSignature(
-                "issueDG(string,string,string,bool)",
-                _name,
-                _symbol,
-                _baseUri,
-                _transferable,
-                _issuer
-            )
-        );
-        require(success, "issueDG failed");
-        address DGAddr = abi.decode(data, (address));
-        deedGrainAddrToIssuer[DGAddr] = msg.sender;
-        emit IssueDG(msg.sender, DGAddr);
-    }
-
-    /// @dev Issue DG NFT
-    /// @param _name ERC721 NFT name
-    /// @param _symbol ERC721 NFT symbol
-    /// @param _baseUri ERC721 NFT baseUri
-    /// @param _evidence Signature by HashKeyDID
-    /// @param _supply DG NFT supply
-    function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply, address _issuer) public {
-        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
-        _evidenceUsed[keccak256(_evidence)] = true;
-        bool success;
-        bytes memory data;
-        (success, data) = dgFactory.delegatecall(
-            abi.encodeWithSignature(
-                "issueNFT(string,string,string,uint256)",
-                _name,
-                _symbol,
-                _baseUri,
-                _supply,
-                _issuer
-            )
-        );
-        require(success, "issueDGNFT failed");
-        address DGNFTAddr = abi.decode(data, (address));
-        deedGrainAddrToIssuer[DGNFTAddr] = msg.sender;
-        emit IssueNFT(msg.sender, DGNFTAddr);
-    }
-
-    /// @dev Set didSigner address
-    /// @param signer_ Did singer address
-    function setSigner(address signer_) public onlyOwner {
-        signer = signer_;
-    }
-
-    /// @dev Set dgFactory address
-    /// @param factory DeedGrainFactory contract address
-    function setDGFactory(address factory) public onlyOwner {
-        dgFactory = factory;
-    }
-
-    /// @dev Only issuer can set every kind of token's supply
-    /// @param DGAddr DG contract address
-    /// @param tokenId TokenId
-    /// @param supply Token's supply number
-    function setTokenSupply(
-        address DGAddr,
-        uint256 tokenId,
-        uint256 supply
-    ) public {
-        require(
-            msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[DGAddr],
-            "caller are not allowed to set supply"
-        );
-        IDeedGrain DG = IDeedGrain(DGAddr);
-        DG.setSupply(tokenId, supply);
-    }
-
-    /// @dev Only issuer can set token's baseuri
-    /// @param DGAddr DG contract address
-    /// @param baseUri All of the token's baseuri
-    function setTokenBaseUri(address DGAddr, string memory baseUri)
-        public
-        onlyOwner
-    {
-        IDeedGrain DG = IDeedGrain(DGAddr);
-        DG.setBaseUri(baseUri);
-    }
-
-    /// @dev Only issuer can airdrop the nft
-    /// @param DGAddr DG contract address
-    /// @param tokenId TokenId
-    /// @param addrs All the users address to airdrop
-    function mintDGV1(address DGAddr, uint tokenId, address[] memory addrs) public {
-        require(msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[DGAddr], "caller are not allowed to mint");
-        IDeedGrainV1 DG = IDeedGrainV1(DGAddr);
-        for(uint i=0; i<addrs.length; i++){
-            DG.mint(addrs[i], tokenId);
-        }
-    }
-
-    /// @dev Only issuer can airdrop the nft
-    /// @param DGAddr DG contract address
-    /// @param tokenId TokenId
-    /// @param addrs All the users address to airdrop
-    function mintDGV2(
-        address DGAddr,
-        uint256 tokenId,
-        address[] memory addrs,
-        bytes memory data
-    ) public {
-        require(
-            msg.sender == dgMinter ||
-                msg.sender == deedGrainAddrToIssuer[DGAddr],
-            "caller are not allowed to mint"
-        );
-        IDeedGrain DG = IDeedGrain(DGAddr);
-        for (uint256 i = 0; i < addrs.length; i++) {
-            DG.mint(addrs[i], tokenId, data);
-        }
-    }
-
-    /// @dev User claim the nft
-    /// @param DGAddr DG token address
-    /// @param tokenId TokenId
-    /// @param evidence Signature
-    function claimDG(
-        address DGAddr,
-        uint256 tokenId,
-        bytes memory data,
-        bytes memory evidence
-    ) public {
-        require(
-            !_evidenceUsed[keccak256(evidence)] &&
-                _validate(
-                    keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data, block.chainid)),
-                    evidence,
-                    signer
-                ),
-            "invalid evidence"
-        );
-        _evidenceUsed[keccak256(evidence)] = true;
-        IDeedGrain DG = IDeedGrain(DGAddr);
-        DG.mint(msg.sender, tokenId, data);
-    }
-
-    /// @dev Only issuer can set NFT supply
-    /// @param NFTAddr DGNFT contract address
-    /// @param supply NFT supply number
-    function setNFTSupply(address NFTAddr, uint256 supply) public {
-        require(
-            msg.sender == dgMinter || msg.sender == deedGrainAddrToIssuer[NFTAddr],
-            "caller are not allowed to set supply"
-        );
-        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
-        NFT.setSupply(supply);
-    }
-
-    /// @dev Only issuer can set NFT's baseuri
-    /// @param NFTAddr DG NFT contract address
-    /// @param baseUri All of the NFT's baseuri
-    function setNFTBaseUri(address NFTAddr, string memory baseUri)
-        public
-        onlyOwner
-    {
-        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
-        NFT.setBaseUri(baseUri);
-    }
-
-    /// @dev Only issuer can airdrop the nft
-    /// @param NFTAddr DG NFT contract address
-    /// @param sid SeriesId
-    /// @param addrs All the users address to airdrop
-    function mintDGNFT(
-        address NFTAddr,
-        uint256 sid,
-        address[] memory addrs
-    ) public {
-        require(
-            msg.sender == dgMinter ||
-                msg.sender == deedGrainAddrToIssuer[NFTAddr],
-            "caller are not allowed to mint"
-        );
-        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
-        for (uint256 i = 0; i < addrs.length; i++) {
-            NFT.mint(addrs[i], sid);
-        }
-    }
-
-    /// @dev User claim the nft
-    /// @param NFTAddr DG NFT address
-    /// @param sid SeriesId
-    /// @param evidence Signature
-    function claimDGNFT(
-        address NFTAddr,
-        uint256 sid,
-        bytes memory evidence
-    ) public {
-        require(
-            !_evidenceUsed[keccak256(evidence)] &&
-                _validate(
-                    keccak256(abi.encodePacked(msg.sender, NFTAddr, sid, block.chainid)),
-                    evidence,
-                    signer
-                ),
-            "invalid evidence"
-        );
-        _evidenceUsed[keccak256(evidence)] = true;
-        IDeedGrainNFT NFT = IDeedGrainNFT(NFTAddr);
-        NFT.mint(msg.sender, sid);
-    }
-
-    /// @dev validate signature msg
-    function _validate(
-        bytes32 message,
-        bytes memory signature,
-        address signer
-    ) internal pure returns (bool) {
-        require(signer != address(0) && signature.length == 65);
-
-        bytes32 r;
-        bytes32 s;
-        uint8 v = uint8(signature[64]) + 27;
-        assembly {
-            r := mload(add(signature, 0x20))
-            s := mload(add(signature, 0x40))
-        }
-        return ecrecover(message, v, r, s) == signer;
-    }
-}
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title A simple did contract v2
 /// @notice You can use this contract to claim an DID to you
@@ -291,14 +22,14 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     event RemoveAuth(string did, address indexed addr, address indexed operator);
     /// @dev Emitted when the owner account has changed.
     event OwnerChanged(address previousOwner, address newOwner);
-    /// @dev Emitted when add KYC successfully 
+    /// @dev Emitted when add KYC successfully
     event AddKYC(uint256 tokenId, address KYCProvider, uint256 KYCId, bool status, uint256 updateTime, uint256 expireTime, bytes evidence);
-    
+
     /// @dev Initialize only once
     /// @param _name ERC721 NFT name
     /// @param _symbol ERC721 NFT symbol
     /// @param _baseTokenURI ERC721 NFT baseTokenURI
-    /// @param _owner The address of the owner, i.e. This owner is used to reserve 
+    /// @param _owner The address of the owner, i.e. This owner is used to reserve
     function initialize(
         string memory _name,
         string memory _symbol,
@@ -321,6 +52,10 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         return baseURI_;
     }
 
+    function setApprovalForAll(address operator, bool) public pure override(ERC721Upgradeable, IERC721Upgradeable) {
+        require(operator == address(0));
+    }
+
     /// @dev Set did airdrop address
     /// @param minter Airdrop address
     function setDidMinterAddr(address minter) public onlyOwner {
@@ -337,62 +72,74 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     }
 
     /// @dev One address can only claim once
-    function claim(uint256 expiredTimestamp, string memory did, bytes memory evidence, string calldata avatar) public payable {
-        _mintDid(msg.sender, did, expiredTimestamp, evidence, avatar);
+    function claim(uint256 expiredTimestamp, string memory did, address token, uint256 amount, bytes memory evidence, string calldata avatar) public payable {
+        if (token == address(0)) {
+            amount = msg.value;
+        }
+        _mintDid(msg.sender, did, expiredTimestamp, token, amount, evidence, avatar);
+        if (token != address(0)) {
+            IERC20(token).transferFrom(msg.sender, address(this), amount);
+        }
     }
 
     /// @dev Mint did
     function mint(address to, uint256 expiredTimestamp, string memory did, bytes memory evidence, string calldata avatar) public {
         require(msg.sender == owner || msg.sender == didMinter, "caller is not allowed to mint did");
-        _mintDid(to, did, expiredTimestamp, evidence, avatar);
+        _mintDid(to, did, expiredTimestamp, address(0), 0, evidence, avatar);
     }
 
-    function _mintDid(address to, string memory did, uint256 expiredTimestamp, bytes memory evidence, string calldata avatar) internal {
+    function _mintDid(address to, string memory did, uint256 expiredTimestamp, address token, uint256 amount, bytes memory evidence, string calldata avatar) internal {
         require(expiredTimestamp >= block.timestamp, "evidence expired");
-        require(!addrClaimed[to], "addr claimed");
-        require(!didClaimed[did], "did used");
-        require(verifyDIDFormat(did), "illegal did");
-        require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer), "invalid evidence");
-        addrClaimed[to] = true;
-        didClaimed[did] = true;
+        require(balanceOf(to) == 0, "addr claimed");
         uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
-        did2TokenId[did] = tokenId;
+        require(!_didClaimed[did] && !_exists(tokenId), "did used");
+        require(verifyDIDFormat(did), "illegal did");
+        require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, token, amount)), evidence, signer), "invalid evidence");
         tokenId2Did[tokenId] = did;
-
         _mint(to, tokenId);
         if (bytes(avatar).length > 0) {
             IResolver(resolver).setAvatar(tokenId, avatar);
         }
     }
-    
+
     /// @dev Sync did
     function mintDidLZ(
         uint256 tokenId,
         address user,
-        string memory did, 
+        string memory did,
         string memory avatar,
         address[] memory KYCProviders,
         uint256[] memory KYCIds,
         KYCInfo[] memory KYCInfos,
         bytes[] memory evidences) external {
         require(msg.sender == didSync || msg.sender == didMinter, "caller is not didSync");
-        require(!addrClaimed[user], "addr claimed");
-        require(!didClaimed[did], "did used");
+        require(balanceOf(user) == 0, "addr claimed");
+        require(!_didClaimed[did] && !_exists(tokenId), "did used");
         require(verifyDIDFormat(did), "illegal did");
 
-        addrClaimed[user] = true;
-        didClaimed[did] = true;
-        did2TokenId[did] = tokenId;
         tokenId2Did[tokenId] = did;
-        
+
         _mint(user, tokenId);
 
-        
         addKYCs(tokenId, KYCProviders, KYCIds, KYCInfos, evidences);
 
         if (bytes(avatar).length > 0) {
             IResolver(resolver).setAvatar(tokenId, avatar);
         }
+    }
+
+    function did2TokenId(string memory did) public view returns (uint256) {
+        uint256 tokenId = _did2TokenId[did];
+        if (tokenId == 0) {
+            tokenId = uint256(keccak256(abi.encodePacked(did)));
+            require(_exists(tokenId));
+        }
+        return tokenId;
+    }
+
+    function didClaimed(string memory did) public view returns (bool) {
+        uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
+        return _didClaimed[did] || _exists(tokenId);
     }
 
     /// @dev Verify did format
@@ -473,10 +220,10 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         KYCInfo[] memory KYCInfos,
         bytes[] memory evidences
     ) public {
-        for(uint i = 0; i < KYCProviders.length; i++){
-            if(_validate(keccak256(abi.encodePacked(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime)), evidences[i], KYCProviders[i])){
+        for (uint i = 0; i < KYCProviders.length; i++) {
+            if (_validate(keccak256(abi.encodePacked(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime)), evidences[i], KYCProviders[i])) {
                 _KYCMap[tokenId][KYCProviders[i]][KYCIds[i]] = KYCInfos[i];
-                emit AddKYC(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime,evidences[i]);
+                emit AddKYC(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime, evidences[i]);
             }
         }
     }
@@ -494,20 +241,23 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     function _beforeTokenTransfer(
         address from,
         address to,
-        uint256 tokenId,
-        uint256
+        uint256 firstTokenId,
+        uint256 batchSize
     )
     internal
     override
     {
         require(from == address(0), "cannot transfer");
-        super._beforeTokenTransfer(from, to, tokenId, 1);
+        super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
     }
 
-    function withdraw() public onlyOwner {
-        uint256 balance = address(this).balance;
-        (bool succeed, ) = payable(msg.sender).call{value: balance}("");
-        require(succeed, "Failed to withdraw");
+    function withdraw(address token) public onlyOwner {
+        if (token != address(0)) {
+            uint256 balance = IERC20(token).balanceOf(address(this));
+            IERC20(token).transfer(msg.sender, balance);
+        } else {
+            payable(msg.sender).transfer(address(this).balance);
+        }
     }
 
     receive() external payable {}
