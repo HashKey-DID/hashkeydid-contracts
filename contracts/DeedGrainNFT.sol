@@ -28,7 +28,7 @@ contract DeedGrainNFT is ERC721 {
         address _issuer
     ) ERC721(_name, _symbol) {
         controller = msg.sender;
-        issuer = tx.origin;
+        issuer = _issuer;
         supply = _supply;
         _baseMetadataURI = _uri;
     }
