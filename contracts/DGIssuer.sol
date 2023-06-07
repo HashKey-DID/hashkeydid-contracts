@@ -50,11 +50,12 @@ abstract contract DGIssuer is DidV2Storage {
         bytes memory data;
         (success, data) = dgFactory.delegatecall(
             abi.encodeWithSignature(
-                "issueDG(string,string,string,bool)",
+                "issueDG(string,string,string,bool,address)",
                 _name,
                 _symbol,
                 _baseUri,
-                _transferable
+                _transferable,
+                msg.sender
             )
         );
         require(success, "issueDG failed");
@@ -76,11 +77,12 @@ abstract contract DGIssuer is DidV2Storage {
         bytes memory data;
         (success, data) = dgFactory.delegatecall(
             abi.encodeWithSignature(
-                "issueNFT(string,string,string,uint256)",
+                "issueNFT(string,string,string,uint256,address)",
                 _name,
                 _symbol,
                 _baseUri,
-                _supply
+                _supply,
+                msg.sender
             )
         );
         require(success, "issueDGNFT failed");
