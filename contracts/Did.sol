@@ -72,29 +72,23 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
     }
 
     /// @dev One address can only claim once
-    function claim(uint256 expiredTimestamp, string memory did, address token, uint256 amount, bytes memory evidence, string calldata avatar) public payable {
-        if (token == address(0)) {
-            amount = msg.value;
-        }
-        _mintDid(msg.sender, did, expiredTimestamp, token, amount, evidence, avatar);
-        if (token != address(0)) {
-            IERC20(token).transferFrom(msg.sender, address(this), amount);
-        }
+    function claim(uint256 expiredTimestamp, string memory did, bytes memory evidence, string calldata avatar) public payable {
+        _mintDid(msg.sender, did, expiredTimestamp, evidence, avatar);
     }
 
     /// @dev Mint did
     function mint(address to, uint256 expiredTimestamp, string memory did, bytes memory evidence, string calldata avatar) public {
         require(msg.sender == owner || msg.sender == didMinter, "caller is not allowed to mint did");
-        _mintDid(to, did, expiredTimestamp, address(0), 0, evidence, avatar);
+        _mintDid(to, did, expiredTimestamp, evidence, avatar);
     }
 
-    function _mintDid(address to, string memory did, uint256 expiredTimestamp, address token, uint256 amount, bytes memory evidence, string calldata avatar) internal {
+    function _mintDid(address to, string memory did, uint256 expiredTimestamp, bytes memory evidence, string calldata avatar) internal {
         require(expiredTimestamp >= block.timestamp, "evidence expired");
         require(balanceOf(to) == 0, "addr claimed");
         uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
         require(!_didClaimed[did] && !_exists(tokenId), "did used");
         require(verifyDIDFormat(did), "illegal did");
-        require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, token, amount)), evidence, signer), "invalid evidence");
+        require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer), "invalid evidence");
         tokenId2Did[tokenId] = did;
         _mint(to, tokenId);
         if (bytes(avatar).length > 0) {
