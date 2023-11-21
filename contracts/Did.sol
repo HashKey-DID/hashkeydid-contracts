@@ -74,7 +74,7 @@ abstract contract DGIssuer is DidV2Storage {
     /// @param _evidence Signature by HashKeyDID
     /// @param _supply DG NFT supply
     function issueNFT(string memory _name, string memory _symbol, string memory _baseUri, bytes memory _evidence, uint256 _supply) public {
-        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encodePacked(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
+        require(!_evidenceUsed[keccak256(_evidence)] && _validate(keccak256(abi.encode(msg.sender, _name, _symbol, _baseUri, block.chainid)), _evidence, signer), "invalid evidence");
         _evidenceUsed[keccak256(_evidence)] = true;
         bool success;
         bytes memory data;
