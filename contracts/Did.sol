@@ -179,7 +179,7 @@ abstract contract DGIssuer is DidV2Storage {
         require(
             !_evidenceUsed[keccak256(evidence)] &&
                 _validate(
-                    keccak256(abi.encodePacked(msg.sender, DGAddr, tokenId, data, block.chainid)),
+                    keccak256(abi.encode(msg.sender, DGAddr, tokenId, data, block.chainid)),
                     evidence,
                     signer
                 ),
@@ -245,7 +245,7 @@ abstract contract DGIssuer is DidV2Storage {
         require(
             !_evidenceUsed[keccak256(evidence)] &&
                 _validate(
-                    keccak256(abi.encodePacked(msg.sender, NFTAddr, sid, block.chainid)),
+                    keccak256(abi.encode(msg.sender, NFTAddr, sid, block.chainid)),
                     evidence,
                     signer
                 ),
@@ -350,7 +350,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         require(!addrClaimed[to], "addr claimed");
         require(!didClaimed[did], "did used");
         require(verifyDIDFormat(did), "illegal did");
-        require(_validate(keccak256(abi.encodePacked(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer), "invalid evidence");
+        require(_validate(keccak256(abi.encode(to, block.chainid, expiredTimestamp, did, msg.value)), evidence, signer), "invalid evidence");
         addrClaimed[to] = true;
         didClaimed[did] = true;
         uint256 tokenId = uint256(keccak256(abi.encodePacked(did)));
@@ -472,7 +472,7 @@ contract DidV2 is ERC721EnumerableUpgradeable, DGIssuer {
         bytes[] memory evidences
     ) public {
         for(uint i = 0; i < KYCProviders.length; i++){
-            if(_validate(keccak256(abi.encodePacked(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime)), evidences[i], KYCProviders[i])){
+            if(_validate(keccak256(abi.encode(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime)), evidences[i], KYCProviders[i])){
                 _KYCMap[tokenId][KYCProviders[i]][KYCIds[i]] = KYCInfos[i];
                 emit AddKYC(tokenId, KYCProviders[i], KYCIds[i], KYCInfos[i].status, KYCInfos[i].updateTime, KYCInfos[i].expireTime,evidences[i]);
             }
